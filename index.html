@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>FC26 Fair Team Picker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="app">
+    <header class="app-header">
+      <div class="title-block">
+        <h1>FC26 Team Randomizer</h1>
+        <p class="subtitle">Fair random teams for your tournaments</p>
+      </div>
+      <div class="pill">4.5★–5★ clubs · Top leagues</div>
+    </header>
+
+    <section class="card">
+      <div class="card-header">
+        <h2 class="card-title">Settings</h2>
+      </div>
+      <div class="card-body settings-grid">
+        <div class="field-group">
+          <label class="field-label">Leagues</label>
+          <div id="league-list" class="league-list">
+            <!-- checkboxes injected by JS -->
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label for="player-count" class="field-label">
+            Number of players
+          </label>
+          <input
+            id="player-count"
+            type="number"
+            min="2"
+            max="20"
+            step="1"
+            value="4"
+          />
+          <p class="hint">Can be odd (3, 5, 7, ...)</p>
+        </div>
+
+        <div class="field-group field-row">
+          <div>
+            <label for="rating-min" class="field-label">Min rating</label>
+            <select id="rating-min"></select>
+          </div>
+          <div>
+            <label for="rating-max" class="field-label">Max rating</label>
+            <select id="rating-max"></select>
+          </div>
+        </div>
+
+        <div class="field-group toggle-row">
+          <label class="toggle-label">
+            <input type="checkbox" id="one-per-league" />
+            <span>Only one team per league</span>
+          </label>
+          <p class="hint">
+            If ON, each league can appear at most once in a spin.
+          </p>
+        </div>
+      </div>
+
+      <div class="actions-row">
+        <button id="generate-btn" class="btn-primary">Spin teams</button>
+        <button id="clear-settings-btn" class="btn-secondary">
+          Reset settings
+        </button>
+      </div>
+
+      <p id="message" class="message" aria-live="polite"></p>
+    </section>
+
+    <section class="card">
+      <div class="card-header">
+        <h2 class="card-title">Result</h2>
+      </div>
+      <div id="results" class="results-list">
+        <p class="placeholder">
+          Set your options and press <strong>Spin teams</strong>.
+        </p>
+      </div>
+    </section>
+
+    <footer class="app-footer">
+      <p>Data saved locally in your browser (localStorage).</p>
+    </footer>
+  </main>
+
+  <script src="app.js" defer></script>
+</body>
+</html>

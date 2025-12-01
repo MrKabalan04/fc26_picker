@@ -1,0 +1,347 @@
+// ====== DATA ======
+
+// Top 5 leagues
+const LEAGUES = [
+  { id: "epl", name: "Premier League" },
+  { id: "laliga", name: "La Liga" },
+  { id: "seriea", name: "Serie A" },
+  { id: "bundes", name: "Bundesliga" },
+  { id: "ligue1", name: "Ligue 1" }
+];
+
+// Extended set of 4.5★–5★ clubs (approximate EA-style stars)
+// You can edit stars later if you want them 100% exact for your game.
+const TEAMS = [
+  // Premier League
+  { leagueId: "epl", leagueName: "Premier League", name: "Manchester City", stars: 5.0 },
+  { leagueId: "epl", leagueName: "Premier League", name: "Arsenal", stars: 5.0 },
+  { leagueId: "epl", leagueName: "Premier League", name: "Liverpool", stars: 5.0 },
+  { leagueId: "epl", leagueName: "Premier League", name: "Chelsea", stars: 4.5 },
+  { leagueId: "epl", leagueName: "Premier League", name: "Manchester United", stars: 4.5 },
+  { leagueId: "epl", leagueName: "Premier League", name: "Newcastle United", stars: 4.5 },
+  { leagueId: "epl", leagueName: "Premier League", name: "Tottenham Hotspur", stars: 4.5 },
+  { leagueId: "epl", leagueName: "Premier League", name: "Aston Villa", stars: 4.5 },
+  { leagueId: "epl", leagueName: "Premier League", name: "Brighton & Hove Albion", stars: 4.5 },
+
+  // La Liga
+  { leagueId: "laliga", leagueName: "La Liga", name: "Real Madrid", stars: 5.0 },
+  { leagueId: "laliga", leagueName: "La Liga", name: "FC Barcelona", stars: 5.0 },
+  { leagueId: "laliga", leagueName: "La Liga", name: "Atlético Madrid", stars: 4.5 },
+  { leagueId: "laliga", leagueName: "La Liga", name: "Real Sociedad", stars: 4.5 },
+  { leagueId: "laliga", leagueName: "La Liga", name: "Villarreal CF", stars: 4.5 },
+
+  // Serie A
+  { leagueId: "seriea", leagueName: "Serie A", name: "Inter", stars: 4.5 },
+  { leagueId: "seriea", leagueName: "Serie A", name: "AC Milan", stars: 4.5 },
+  { leagueId: "seriea", leagueName: "Serie A", name: "Napoli", stars: 4.5 },
+  { leagueId: "seriea", leagueName: "Serie A", name: "Juventus", stars: 4.5 },
+  { leagueId: "seriea", leagueName: "Serie A", name: "AS Roma", stars: 4.5 },
+  { leagueId: "seriea", leagueName: "Serie A", name: "Lazio", stars: 4.5 },
+
+  // Bundesliga
+  { leagueId: "bundes", leagueName: "Bundesliga", name: "Bayern Munich", stars: 5.0 },
+  { leagueId: "bundes", leagueName: "Bundesliga", name: "Borussia Dortmund", stars: 4.5 },
+  { leagueId: "bundes", leagueName: "Bundesliga", name: "RB Leipzig", stars: 4.5 },
+  { leagueId: "bundes", leagueName: "Bundesliga", name: "Bayer Leverkusen", stars: 4.5 },
+
+  // Ligue 1
+  { leagueId: "ligue1", leagueName: "Ligue 1", name: "Paris Saint-Germain", stars: 5.0 },
+  { leagueId: "ligue1", leagueName: "Ligue 1", name: "AS Monaco", stars: 4.5 },
+  { leagueId: "ligue1", leagueName: "Ligue 1", name: "Olympique de Marseille", stars: 4.5 },
+  { leagueId: "ligue1", leagueName: "Ligue 1", name: "Olympique Lyonnais", stars: 4.5 },
+  { leagueId: "ligue1", leagueName: "Ligue 1", name: "Lille OSC", stars: 4.5 }
+];
+
+const STORAGE_KEY = "fc26-team-picker-settings";
+
+// ====== HELPERS ======
+
+function shuffle(array) {
+  // In-place Fisher-Yates
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+}
+
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function saveSettings(settings) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  } catch {
+    // ignore
+  }
+}
+
+// ====== MAIN APP ======
+
+document.addEventListener("DOMContentLoaded", () => {
+  const leagueListEl = document.getElementById("league-list");
+  const playerCountEl = document.getElementById("player-count");
+  const ratingMinEl = document.getElementById("rating-min");
+  const ratingMaxEl = document.getElementById("rating-max");
+  const onePerLeagueEl = document.getElementById("one-per-league");
+  const generateBtn = document.getElementById("generate-btn");
+  const clearSettingsBtn = document.getElementById("clear-settings-btn");
+  const resultsEl = document.getElementById("results");
+  const messageEl = document.getElementById("message");
+
+  // Render league checkboxes
+  LEAGUES.forEach((league) => {
+    const label = document.createElement("label");
+    label.className = "league-chip";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.value = league.id;
+    checkbox.dataset.leagueId = league.id;
+
+    const text = document.createElement("span");
+    text.textContent = league.name;
+
+    label.appendChild(checkbox);
+    label.appendChild(text);
+    leagueListEl.appendChild(label);
+  });
+
+  // Populate rating selects
+  const ratingValues = [3.5, 4.0, 4.5, 5.0];
+  ratingValues.forEach((val) => {
+    const optMin = document.createElement("option");
+    optMin.value = String(val);
+    optMin.textContent = `${val.toFixed(1)}★`;
+    ratingMinEl.appendChild(optMin);
+
+    const optMax = document.createElement("option");
+    optMax.value = String(val);
+    optMax.textContent = `${val.toFixed(1)}★`;
+    ratingMaxEl.appendChild(optMax);
+  });
+
+  // Default rating range: 4.5–5.0
+  ratingMinEl.value = "4.5";
+  ratingMaxEl.value = "5.0";
+
+  // Load saved settings if any
+  const saved = loadSettings();
+  if (saved) {
+    if (typeof saved.playerCount === "number") {
+      playerCountEl.value = String(saved.playerCount);
+    }
+    if (saved.minRating != null) {
+      ratingMinEl.value = String(saved.minRating);
+    }
+    if (saved.maxRating != null) {
+      ratingMaxEl.value = String(saved.maxRating);
+    }
+    if (typeof saved.onlyOnePerLeague === "boolean") {
+      onePerLeagueEl.checked = saved.onlyOnePerLeague;
+    }
+    if (Array.isArray(saved.selectedLeagueIds)) {
+      const set = new Set(saved.selectedLeagueIds);
+      const checkboxes = leagueListEl.querySelectorAll("input[type=checkbox]");
+      checkboxes.forEach((cb) => {
+        cb.checked = set.has(cb.value);
+      });
+    }
+  } else {
+    // First time: select all leagues by default
+    const checkboxes = leagueListEl.querySelectorAll("input[type=checkbox]");
+    checkboxes.forEach((cb) => {
+      cb.checked = true;
+    });
+  }
+
+  function getSelectedLeagueIds() {
+    const checked = leagueListEl.querySelectorAll(
+      "input[type=checkbox]:checked"
+    );
+    return Array.from(checked).map((cb) => cb.value);
+  }
+
+  function showMessage(text, type = "") {
+    messageEl.textContent = text;
+    messageEl.classList.remove("message--error", "message--success");
+    if (type === "error") messageEl.classList.add("message--error");
+    if (type === "success") messageEl.classList.add("message--success");
+  }
+
+  function persistSettings() {
+    const settings = {
+      selectedLeagueIds: getSelectedLeagueIds(),
+      playerCount: Number(playerCountEl.value) || 0,
+      minRating: parseFloat(ratingMinEl.value),
+      maxRating: parseFloat(ratingMaxEl.value),
+      onlyOnePerLeague: onePerLeagueEl.checked
+    };
+    saveSettings(settings);
+  }
+
+  // Persist on changes
+  leagueListEl.addEventListener("change", persistSettings);
+  playerCountEl.addEventListener("input", persistSettings);
+  ratingMinEl.addEventListener("change", persistSettings);
+  ratingMaxEl.addEventListener("change", persistSettings);
+  onePerLeagueEl.addEventListener("change", persistSettings);
+
+  clearSettingsBtn.addEventListener("click", () => {
+    localStorage.removeItem(STORAGE_KEY);
+    // Reset UI
+    const checkboxes = leagueListEl.querySelectorAll("input[type=checkbox]");
+    checkboxes.forEach((cb) => (cb.checked = true));
+    playerCountEl.value = "4";
+    ratingMinEl.value = "4.5";
+    ratingMaxEl.value = "5.0";
+    onePerLeagueEl.checked = false;
+    showMessage("Settings reset to defaults.", "success");
+    resultsEl.innerHTML =
+      '<p class="placeholder">Set your options and press <strong>Spin teams</strong>.</p>';
+  });
+
+  generateBtn.addEventListener("click", () => {
+    const selectedLeagueIds = getSelectedLeagueIds();
+    const playerCount = Number(playerCountEl.value);
+    let minRating = parseFloat(ratingMinEl.value);
+    let maxRating = parseFloat(ratingMaxEl.value);
+    const onlyOnePerLeague = onePerLeagueEl.checked;
+
+    // Basic validation
+    if (!Number.isFinite(playerCount) || playerCount < 2) {
+      showMessage("Player count must be at least 2.", "error");
+      return;
+    }
+
+    if (selectedLeagueIds.length === 0) {
+      showMessage("Select at least one league.", "error");
+      return;
+    }
+
+    if (!Number.isFinite(minRating) || !Number.isFinite(maxRating)) {
+      showMessage("Select a valid rating range.", "error");
+      return;
+    }
+
+    // If min > max, auto-swap
+    if (minRating > maxRating) {
+      [minRating, maxRating] = [maxRating, minRating];
+      ratingMinEl.value = String(minRating);
+      ratingMaxEl.value = String(maxRating);
+    }
+
+    // Filter pool
+    const pool = TEAMS.filter(
+      (team) =>
+        selectedLeagueIds.includes(team.leagueId) &&
+        team.stars >= minRating &&
+        team.stars <= maxRating
+    );
+
+    if (pool.length === 0) {
+      showMessage(
+        "No teams match this rating range in the selected leagues.",
+        "error"
+      );
+      resultsEl.innerHTML =
+        '<p class="placeholder">Try widening the rating range or adding more leagues.</p>';
+      return;
+    }
+
+    if (!onlyOnePerLeague && pool.length < playerCount) {
+      showMessage(
+        `Not enough teams (${pool.length}) for ${playerCount} players. Add more leagues or lower player count.`,
+        "error"
+      );
+      return;
+    }
+
+    // Only one team per league case
+    if (onlyOnePerLeague) {
+      const leagueToTeams = new Map();
+      for (const team of pool) {
+        if (!leagueToTeams.has(team.leagueId)) {
+          leagueToTeams.set(team.leagueId, []);
+        }
+        leagueToTeams.get(team.leagueId).push(team);
+      }
+
+      const availableLeagueIds = Array.from(leagueToTeams.keys());
+      if (availableLeagueIds.length < playerCount) {
+        showMessage(
+          `You selected ${playerCount} players but only ${availableLeagueIds.length} leagues have teams in this rating range. Either allow multiple teams per league or lower the player count.`,
+          "error"
+        );
+        return;
+      }
+
+      shuffle(availableLeagueIds);
+
+      const assignments = [];
+      for (let i = 0; i < playerCount; i++) {
+        const leagueId = availableLeagueIds[i];
+        const teamsInLeague = leagueToTeams.get(leagueId);
+        const randomTeam =
+          teamsInLeague[Math.floor(Math.random() * teamsInLeague.length)];
+        assignments.push(randomTeam);
+      }
+
+      renderResults(assignments, resultsEl);
+      showMessage("Teams generated successfully!", "success");
+      persistSettings();
+      return;
+    }
+
+    // Multiple teams per league allowed; just ensure unique clubs
+    const remaining = [...pool];
+    shuffle(remaining);
+
+    const assignments = remaining.slice(0, playerCount);
+    renderResults(assignments, resultsEl);
+    showMessage("Teams generated successfully!", "success");
+    persistSettings();
+  });
+});
+
+function renderResults(assignments, container) {
+  container.innerHTML = "";
+  assignments.forEach((team, index) => {
+    const card = document.createElement("div");
+    card.className = "player-card";
+
+    const main = document.createElement("div");
+    main.className = "player-main";
+
+    const label = document.createElement("div");
+    label.className = "player-label";
+    label.textContent = `Player ${index + 1}`;
+
+    const teamNameEl = document.createElement("div");
+    teamNameEl.className = "player-team";
+    teamNameEl.textContent = team.name;
+
+    const meta = document.createElement("div");
+    meta.className = "player-meta";
+    meta.textContent = team.leagueName;
+
+    main.appendChild(label);
+    main.appendChild(teamNameEl);
+    main.appendChild(meta);
+
+    const rating = document.createElement("div");
+    rating.className = "player-rating";
+    rating.textContent = `${team.stars.toFixed(1)}★`;
+
+    card.appendChild(main);
+    card.appendChild(rating);
+
+    container.appendChild(card);
+  });
+}
