@@ -366,6 +366,10 @@ button {
   color: #6b7280;
 }
 
+.hidden {
+  display: none;
+}
+
 /* Desktop tweaks */
 @media (min-width: 900px) {
   .app {

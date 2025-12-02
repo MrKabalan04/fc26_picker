@@ -1,95 +1,235 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>FC26 Fair Team Picker</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="stylesheet" href="style.css" />
-</head>
-<body>
-  <main class="app">
-    <header class="app-header">
-      <div class="title-block">
-        <h1>FC26 Team Randomizer</h1>
-        <p class="subtitle">Fair random teams for your tournaments | Powered by: Mr Kabalan</p>
-      </div>
-      <div class="pill">0.5★–5★ clubs · Top leagues</div>
-    </header>
+  <head>
+    <meta charset="UTF-8" />
+    <title>FC26 Team Picker & Tournament</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
 
-    <section class="card">
-      <div class="card-header">
-        <h2 class="card-title">Settings</h2>
-      </div>
-      <div class="card-body settings-grid">
-        <div class="field-group">
-          <label class="field-label">Leagues</label>
-          <div id="league-list" class="league-list">
-            <!-- checkboxes injected by JS -->
-          </div>
-        </div>
-
-        <div class="field-group">
-          <label for="player-count" class="field-label">
-            Number of players
-          </label>
-          <input
-            id="player-count"
-            type="number"
-            min="2"
-            max="20"
-            step="1"
-            value="4"
-          />
-        </div>
-
-        <div class="field-group field-row">
-          <div>
-            <label for="rating-min" class="field-label">Min rating</label>
-            <select id="rating-min"></select>
-          </div>
-          <div>
-            <label for="rating-max" class="field-label">Max rating</label>
-            <select id="rating-max"></select>
-          </div>
-        </div>
-
-        <div class="field-group toggle-row">
-          <label class="toggle-label">
-            <input type="checkbox" id="one-per-league" />
-            <span>Only one team per league</span>
-          </label>
-          <p class="hint">
-            If ON, each league can appear at most once in a spin.
+  <body>
+    <div class="app">
+      <!-- HEADER -->
+      <header class="app-header">
+        <div class="title-block">
+          <h1>FC26 Session Hub</h1>
+          <p class="subtitle">
+            Random teams · Custom tournaments · Score tracking
           </p>
         </div>
-      </div>
+        <div class="pill">Local FIFA Nights</div>
+      </header>
 
-      <div class="actions-row">
-        <button id="generate-btn" class="btn-primary">Spin teams</button>
-        <button id="clear-settings-btn" class="btn-secondary">
-          Reset settings
-        </button>
-      </div>
+      <!-- NAVBAR / TABS -->
+      <nav class="card">
+        <div class="card-header">
+          <div class="card-title">Mode</div>
+        </div>
 
-      <p id="message" class="message" aria-live="polite"></p>
-    </section>
+        <div class="card-body actions-row" id="mode-tabs">
+          <button
+            type="button"
+            class="btn-primary"
+            data-tab="picker"
+            id="tab-btn-picker"
+          >
+            Team Picker
+          </button>
 
-    <section class="card">
-      <div class="card-header">
-        <h2 class="card-title">Result</h2>
-      </div>
-      <div id="results" class="results-list">
-        <p class="placeholder">
-          Set your options and press <strong>Spin teams</strong>.
-        </p>
-      </div>
-    </section>
+          <button
+            type="button"
+            class="btn-secondary"
+            data-tab="tournament"
+            id="tab-btn-tournament"
+          >
+            Tournament
+          </button>
+        </div>
+      </nav>
 
-    <footer class="app-footer">
-      <p>NOTE: IF YOU REFRESH THE PAGE, ALL THE DATA WILL BE GONE</p>
-    </footer>
-  </main>
+      <!-- TAB 1: TEAM PICKER -->
+      <main id="tab-picker">
+        <section class="card">
+          <div class="card-header">
+            <div class="card-title">Team Picker</div>
+          </div>
 
-  <script src="app.js" type="module"></script>
-</body>
+          <div class="card-body">
+            <div class="settings-grid">
+              <!-- Player count -->
+              <div class="field-group">
+                <label for="player-count" class="field-label">Players</label>
+                <input
+                  type="number"
+                  id="player-count"
+                  min="2"
+                  max="32"
+                  value="4"
+                />
+              </div>
+
+              <!-- Rating range -->
+              <div class="field-group">
+                <label class="field-label">Rating range</label>
+                <div style="display: flex; gap: 6px">
+                  <select id="rating-min"></select>
+                  <select id="rating-max"></select>
+                </div>
+              </div>
+
+              <!-- League selection -->
+              <div class="field-group field-row">
+                <label class="field-label">Leagues / Pools</label>
+                <div id="league-list" class="league-list"></div>
+              </div>
+            </div>
+
+            <!-- One per league -->
+            <div class="toggle-row">
+              <label class="toggle-label">
+                <input type="checkbox" id="one-per-league" />
+                One team per league
+              </label>
+              <p class="hint">
+                When enabled, each player will get a team from a different
+                league.
+              </p>
+            </div>
+
+            <!-- Actions -->
+            <div class="actions-row">
+              <button type="button" id="generate-btn" class="btn-primary">
+                Spin teams
+              </button>
+              <button
+                type="button"
+                id="clear-settings-btn"
+                class="btn-secondary"
+              >
+                Reset settings
+              </button>
+            </div>
+
+            <p id="message" class="message"></p>
+          </div>
+        </section>
+
+        <!-- Results -->
+        <section class="card">
+          <div class="card-header">
+            <div class="card-title">Assigned Teams</div>
+          </div>
+
+          <div class="card-body">
+            <div id="results" class="results-list">
+              <p class="placeholder">
+                Set your options and press <strong>Spin teams</strong>.
+              </p>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <!-- TAB 2: TOURNAMENT -->
+      <main id="tab-tournament" class="hidden">
+        <!-- Tournament Setup -->
+        <section class="card">
+          <div class="card-header">
+            <div class="card-title">Tournament Setup</div>
+          </div>
+
+          <div class="card-body">
+            <div class="settings-grid">
+              <!-- Type -->
+              <div class="field-group">
+                <label class="field-label">Tournament type</label>
+                <select id="tournament-type">
+                  <option value="knockout">Knockout</option>
+                  <option value="groups">Group Stage</option>
+                  <option value="groups-knockout">Groups → Knockout</option>
+                </select>
+              </div>
+
+              <!-- Player count -->
+              <div class="field-group">
+                <label class="field-label">Players</label>
+                <input
+                  type="number"
+                  id="tournament-player-count"
+                  min="2"
+                  max="32"
+                  value="4"
+                />
+                <p class="hint">Must match the number of assigned teams.</p>
+              </div>
+
+              <!-- Home & Away in groups -->
+              <div class="field-group">
+                <label class="field-label">
+                  <input type="checkbox" id="groups-home-away" />
+                  Home & Away in group stage
+                </label>
+                <p class="hint">Each team plays twice (home + away).</p>
+              </div>
+
+              <!-- Home & Away in knockout -->
+              <div class="field-group">
+                <label class="field-label">
+                  <input type="checkbox" id="knockout-home-away" />
+                  Home & Away in knockout
+                </label>
+                <p class="hint">Each tie has two legs.</p>
+              </div>
+
+              <!-- Team import -->
+              <div class="field-group field-row">
+                <label class="field-label">Teams source</label>
+
+                <div class="actions-row">
+                  <button
+                    type="button"
+                    id="tournament-use-last"
+                    class="btn-primary"
+                  >
+                    Use teams from last spin
+                  </button>
+
+                  <button
+                    type="button"
+                    id="tournament-clear"
+                    class="btn-secondary"
+                  >
+                    Clear tournament
+                  </button>
+                </div>
+
+                <p id="tournament-setup-message" class="message"></p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Groups -->
+        <section class="card" id="groups-card" style="display: none">
+          <div class="card-header">
+            <div class="card-title">Groups</div>
+          </div>
+          <div class="card-body" id="groups-container"></div>
+        </section>
+
+        <!-- Knockout -->
+        <section class="card" id="knockout-card" style="display: none">
+          <div class="card-header">
+            <div class="card-title">Knockout Bracket</div>
+          </div>
+          <div class="card-body" id="knockout-container"></div>
+        </section>
+      </main>
+
+      <footer class="app-footer">
+        Built for late-night FC sessions ⚽
+      </footer>
+    </div>
+
+    <script type="module" src="main.js"></script>
+  </body>
 </html>
