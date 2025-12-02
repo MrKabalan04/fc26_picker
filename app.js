@@ -4,7 +4,7 @@ import National from "./data/national_teams.js";
 
 const STORAGE_KEY = "fc26-team-picker-settings";
 
-// 👇 NEW: merge club + national teams into a single list
+// Merge club + national teams into a single list
 const ALL_TEAMS = [...TEAMS, ...National];
 
 // ====== HELPERS ======
@@ -66,8 +66,12 @@ document.addEventListener("DOMContentLoaded", () => {
     leagueListEl.appendChild(label);
   });
 
-  // Populate rating selects
-  const ratingValues = [3.5, 4.0, 4.5, 5.0];
+  // Populate rating selects (0.5★ to 5.0★)
+  const ratingValues = [];
+  for (let val = 0.5; val <= 5.0 + 1e-9; val += 0.5) {
+    ratingValues.push(Number(val.toFixed(1)));
+  }
+
   ratingValues.forEach((val) => {
     const optMin = document.createElement("option");
     optMin.value = String(val);
@@ -190,7 +194,7 @@ document.addEventListener("DOMContentLoaded", () => {
       ratingMaxEl.value = String(maxRating);
     }
 
-    // 🔥 Filter pool – now using ALL_TEAMS (clubs + national)
+    // Filter pool (clubs + national teams)
     const pool = ALL_TEAMS.filter(
       (team) =>
         selectedLeagueIds.includes(team.leagueId) &&
