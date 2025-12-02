@@ -1,58 +1,11 @@
-// ====== DATA ======
-
-// Top 5 leagues
-const LEAGUES = [
-  { id: "epl", name: "Premier League" },
-  { id: "laliga", name: "La Liga" },
-  { id: "seriea", name: "Serie A" },
-  { id: "bundes", name: "Bundesliga" },
-  { id: "ligue1", name: "Ligue 1" }
-];
-
-// Extended set of 4.5★–5★ clubs (approximate EA-style stars)
-// You can edit stars later if you want them 100% exact for your game.
-const TEAMS = [
-  // Premier League
-  { leagueId: "epl", leagueName: "Premier League", name: "Manchester City", stars: 5.0 },
-  { leagueId: "epl", leagueName: "Premier League", name: "Arsenal", stars: 5.0 },
-  { leagueId: "epl", leagueName: "Premier League", name: "Liverpool", stars: 5.0 },
-  { leagueId: "epl", leagueName: "Premier League", name: "Chelsea", stars: 4.5 },
-  { leagueId: "epl", leagueName: "Premier League", name: "Manchester United", stars: 4.5 },
-  { leagueId: "epl", leagueName: "Premier League", name: "Newcastle United", stars: 4.5 },
-  { leagueId: "epl", leagueName: "Premier League", name: "Tottenham Hotspur", stars: 4.5 },
-  { leagueId: "epl", leagueName: "Premier League", name: "Aston Villa", stars: 4.5 },
-  { leagueId: "epl", leagueName: "Premier League", name: "Brighton & Hove Albion", stars: 4.5 },
-
-  // La Liga
-  { leagueId: "laliga", leagueName: "La Liga", name: "Real Madrid", stars: 5.0 },
-  { leagueId: "laliga", leagueName: "La Liga", name: "FC Barcelona", stars: 5.0 },
-  { leagueId: "laliga", leagueName: "La Liga", name: "Atlético Madrid", stars: 4.5 },
-  { leagueId: "laliga", leagueName: "La Liga", name: "Real Sociedad", stars: 4.5 },
-  { leagueId: "laliga", leagueName: "La Liga", name: "Villarreal CF", stars: 4.5 },
-
-  // Serie A
-  { leagueId: "seriea", leagueName: "Serie A", name: "Inter", stars: 4.5 },
-  { leagueId: "seriea", leagueName: "Serie A", name: "AC Milan", stars: 4.5 },
-  { leagueId: "seriea", leagueName: "Serie A", name: "Napoli", stars: 4.5 },
-  { leagueId: "seriea", leagueName: "Serie A", name: "Juventus", stars: 4.5 },
-  { leagueId: "seriea", leagueName: "Serie A", name: "AS Roma", stars: 4.5 },
-  { leagueId: "seriea", leagueName: "Serie A", name: "Lazio", stars: 4.5 },
-
-  // Bundesliga
-  { leagueId: "bundes", leagueName: "Bundesliga", name: "Bayern Munich", stars: 5.0 },
-  { leagueId: "bundes", leagueName: "Bundesliga", name: "Borussia Dortmund", stars: 4.5 },
-  { leagueId: "bundes", leagueName: "Bundesliga", name: "RB Leipzig", stars: 4.5 },
-  { leagueId: "bundes", leagueName: "Bundesliga", name: "Bayer Leverkusen", stars: 4.5 },
-
-  // Ligue 1
-  { leagueId: "ligue1", leagueName: "Ligue 1", name: "Paris Saint-Germain", stars: 5.0 },
-  { leagueId: "ligue1", leagueName: "Ligue 1", name: "AS Monaco", stars: 4.5 },
-  { leagueId: "ligue1", leagueName: "Ligue 1", name: "Olympique de Marseille", stars: 4.5 },
-  { leagueId: "ligue1", leagueName: "Ligue 1", name: "Olympique Lyonnais", stars: 4.5 },
-  { leagueId: "ligue1", leagueName: "Ligue 1", name: "Lille OSC", stars: 4.5 }
-];
+import LEAGUES from "./data/leagues.js";
+import TEAMS from "./data/teams.js";
+import National from "./data/national_teams.js";
 
 const STORAGE_KEY = "fc26-team-picker-settings";
+
+// 👇 NEW: merge club + national teams into a single list
+const ALL_TEAMS = [...TEAMS, ...National];
 
 // ====== HELPERS ======
 
@@ -237,8 +190,8 @@ document.addEventListener("DOMContentLoaded", () => {
       ratingMaxEl.value = String(maxRating);
     }
 
-    // Filter pool
-    const pool = TEAMS.filter(
+    // 🔥 Filter pool – now using ALL_TEAMS (clubs + national)
+    const pool = ALL_TEAMS.filter(
       (team) =>
         selectedLeagueIds.includes(team.leagueId) &&
         team.stars >= minRating &&
