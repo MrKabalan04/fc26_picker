@@ -68,8 +68,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Populate rating selects (0.5★ to 5.0★)
   const ratingValues = [];
-  for (let val = 0.5; val <= 5.0 + 1e-9; val += 0.5) {
-    ratingValues.push(Number(val.toFixed(1)));
+  for (let i = 1; i <= 10; i++) {
+    ratingValues.push(i * 0.5); // 0.5, 1.0, ..., 5.0
   }
 
   ratingValues.forEach((val) => {
@@ -273,6 +273,23 @@ function renderResults(assignments, container) {
     const card = document.createElement("div");
     card.className = "player-card";
 
+    // Logo
+    const logoWrapper = document.createElement("div");
+    logoWrapper.className = "player-logo-wrapper";
+
+    const logoImg = document.createElement("img");
+    logoImg.className = "player-logo";
+    logoImg.alt = `${team.name} logo`;
+
+    if (team.logo) {
+      logoImg.src = team.logo;
+    } else {
+      logoImg.src = "https://placehold.co/64x64?text=FC";
+    }
+
+    logoWrapper.appendChild(logoImg);
+
+    // Text area
     const main = document.createElement("div");
     main.className = "player-main";
 
@@ -292,10 +309,13 @@ function renderResults(assignments, container) {
     main.appendChild(teamNameEl);
     main.appendChild(meta);
 
+    // Rating
     const rating = document.createElement("div");
     rating.className = "player-rating";
     rating.textContent = `${team.stars.toFixed(1)}★`;
 
+    // Put it all together
+    card.appendChild(logoWrapper);
     card.appendChild(main);
     card.appendChild(rating);
 
