@@ -2,32 +2,31 @@
 import { shuffle } from "./utils.js";
 
 /**
- * Entry point used by tournament.js
- * players: [{ id, label, team }]
- * options: { homeAway: boolean }  // homeAway applies to ALL ROUNDS EXCEPT FINAL
+ * entries: [{ id, label, team, ownerId, ownerLabel }]
+ * options: { homeAway: boolean }  // homeAway applies to all rounds EXCEPT the Final
  */
-export function generateKnockoutTournament(players, container, { homeAway }) {
+export function generateKnockoutTournament(entries, container, { homeAway }) {
   container.innerHTML = "";
 
-  const count = players.length;
+  const count = entries.length;
   const allowed = [2, 4, 8, 16, 32];
   if (!allowed.includes(count)) {
     container.innerHTML =
-      "<p class='placeholder'>Knockout currently supports 2, 4, 8, 16, or 32 players.</p>";
+      "<p class='placeholder'>Knockout currently supports 2, 4, 8, 16, or 32 entries.</p>";
     return;
   }
 
-  const shuffled = [...players];
+  const shuffled = [...entries];
   shuffle(shuffled);
 
   const state = {
-    homeAway,              // global preference (used for all rounds except Final)
+    homeAway,
     initialCount: count,
-    rounds: [],            // [{ name, ties: [...] }]
-    players: shuffled,
+    rounds: [], // [{ name, ties: [...] }]
+    participants: shuffled,
     thirdPlace: {
-      teamA: null,         // losing semi-finalist A (player object)
-      teamB: null,         // losing semi-finalist B (player object)
+      teamA: null,
+      teamB: null,
       goalsA: null,
       goalsB: null,
       pensA: null,
@@ -35,7 +34,6 @@ export function generateKnockoutTournament(players, container, { homeAway }) {
     }
   };
 
-  // create first round
   const firstRound = createRoundFromParticipants(shuffled, homeAway, 0);
   state.rounds.push(firstRound);
 
@@ -54,28 +52,25 @@ function roundNameForCount(count) {
 }
 
 /**
- * Create a round (Round of 16, Quarters, Semis, Final)
- * For Final (2 teams), we always force single-leg (twoLegged = false).
+ * For the Final (2 entries), force single-leg (twoLegged = false).
  */
 function createRoundFromParticipants(participants, homeAway, depth) {
   const roundSize = participants.length;
   const name = roundNameForCount(roundSize);
 
-  // Final is always single leg:
   const twoLeggedForThisRound = homeAway && roundSize > 2;
 
   const ties = [];
   for (let i = 0; i < participants.length; i += 2) {
     const home = participants[i];
     const away = participants[i + 1];
-
     if (!home || !away) continue;
 
     ties.push({
       id: `R${depth + 1}-T${i / 2 + 1}`,
       home,
       away,
-      twoLegged: twoLeggedForThisRound, // 👈 important
+      twoLegged: twoLeggedForThisRound,
       leg1HomeGoals: null,
       leg1AwayGoals: null,
       leg2HomeGoals: twoLeggedForThisRound ? null : null,
@@ -90,10 +85,6 @@ function createRoundFromParticipants(participants, homeAway, depth) {
   return { name, ties };
 }
 
-/**
- * Decide winner for a tie (single-leg or two-legged),
- * including penalties if needed.
- */
 function computeTieWinner(tie) {
   const {
     twoLegged,
@@ -107,11 +98,9 @@ function computeTieWinner(tie) {
 
   const valid = (v) => Number.isInteger(v) && v >= 0;
 
-  // SINGLE-LEG (includes the Final)
+  // SINGLE-LEG (includes Final)
   if (!twoLegged) {
-    if (!valid(leg1HomeGoals) || !valid(leg1AwayGoals)) {
-      return null;
-    }
+    if (!valid(leg1HomeGoals) || !valid(leg1AwayGoals)) return null;
 
     if (leg1HomeGoals > leg1AwayGoals) {
       return { winner: tie.home, loser: tie.away };
@@ -120,7 +109,7 @@ function computeTieWinner(tie) {
       return { winner: tie.away, loser: tie.home };
     }
 
-    // Draw → check penalties
+    // Draw -> penalties
     if (valid(pensHome) && valid(pensAway) && pensHome !== pensAway) {
       return pensHome > pensAway
         ? { winner: tie.home, loser: tie.away }
@@ -129,7 +118,7 @@ function computeTieWinner(tie) {
     return null;
   }
 
-  // TWO-LEGGED (home & away, NOT final)
+  // TWO-LEGGED (not final)
   if (
     !valid(leg1HomeGoals) ||
     !valid(leg1AwayGoals) ||
@@ -149,7 +138,6 @@ function computeTieWinner(tie) {
     return { winner: tie.away, loser: tie.home };
   }
 
-  // Aggregate tie → penalties
   if (valid(pensHome) && valid(pensAway) && pensHome !== pensAway) {
     return pensHome > pensAway
       ? { winner: tie.home, loser: tie.away }
@@ -159,14 +147,8 @@ function computeTieWinner(tie) {
   return null;
 }
 
-/**
- * Recompute everything:
- *  - winners of each tie
- *  - auto-generate next rounds when all ties decided
- *  - auto-fill semi-final losers into 3rd place match
- */
 function recompute(state) {
-  const maxRounds = Math.log2(state.initialCount); // e.g. 16 → 4
+  const maxRounds = Math.log2(state.initialCount);
 
   for (let r = 0; r < state.rounds.length; r++) {
     const round = state.rounds[r];
@@ -192,7 +174,6 @@ function recompute(state) {
       winners.length > 1 &&
       state.rounds.length < maxRounds
     ) {
-      // create next round from winners
       const nextRound = createRoundFromParticipants(
         winners,
         state.homeAway,
@@ -202,13 +183,9 @@ function recompute(state) {
     }
   }
 
-  // after all rounds recomputed, update 3rd-place info from semi-finals
   updateThirdPlaceFromSemis(state);
 }
 
-/**
- * Fill thirdPlace.teamA & teamB from semi-final losers
- */
 function updateThirdPlaceFromSemis(state) {
   if (state.initialCount < 4) {
     state.thirdPlace.teamA = null;
@@ -238,7 +215,6 @@ function updateThirdPlaceFromSemis(state) {
   if (losers.length === 2) {
     state.thirdPlace.teamA = losers[0];
     state.thirdPlace.teamB = losers[1];
-    // keep existing scores if user already entered them
   } else {
     state.thirdPlace.teamA = null;
     state.thirdPlace.teamB = null;
@@ -249,7 +225,7 @@ function updateThirdPlaceFromSemis(state) {
   }
 }
 
-/* ---------- helpers: view / DOM ---------- */
+/* ---------- view ---------- */
 
 function renderKnockout(container, state) {
   container.innerHTML = "";
@@ -289,20 +265,25 @@ function renderKnockout(container, state) {
       tieBlock.style.flexDirection = "column";
       tieBlock.style.gap = "4px";
 
+      // 🔥 Prefer team names if available
+      const homeName = tie.home.team?.name || tie.home.label;
+      const awayName = tie.away.team?.name || tie.away.label;
+
       const info = document.createElement("div");
       info.style.fontSize = "0.85rem";
-      info.textContent = `Match ${tieIndex + 1}: ${tie.home.label} (${tie.home.team.name}) vs ${tie.away.label} (${tie.away.team.name})`;
+      info.textContent = `Match ${tieIndex + 1}: ${homeName} vs ${awayName}`;
       tieBlock.appendChild(info);
 
       // LEG 1
       const leg1Row = document.createElement("div");
       leg1Row.style.display = "flex";
       leg1Row.style.alignItems = "center";
+      leg1Row.style.flexWrap = "wrap";
       leg1Row.style.gap = "6px";
       leg1Row.style.fontSize = "0.85rem";
 
       const leg1Label = document.createElement("span");
-      leg1Label.textContent = `Leg 1: ${tie.home.team.name} vs ${tie.away.team.name}`;
+      leg1Label.textContent = `Leg 1: ${homeName} vs ${awayName}`;
 
       const leg1Home = document.createElement("input");
       leg1Home.type = "number";
@@ -328,17 +309,18 @@ function renderKnockout(container, state) {
 
       tieBlock.appendChild(leg1Row);
 
-      // LEG 2 (only if tie.twoLegged is true, so NOT the final)
+      // LEG 2 (if twoLegged)
       let leg2HomeInput, leg2AwayInput;
       if (tie.twoLegged) {
         const leg2Row = document.createElement("div");
         leg2Row.style.display = "flex";
         leg2Row.style.alignItems = "center";
+        leg2Row.style.flexWrap = "wrap";
         leg2Row.style.gap = "6px";
         leg2Row.style.fontSize = "0.85rem";
 
         const leg2Label = document.createElement("span");
-        leg2Label.textContent = `Leg 2: ${tie.away.team.name} vs ${tie.home.team.name}`;
+        leg2Label.textContent = `Leg 2: ${awayName} vs ${homeName}`;
 
         leg2HomeInput = document.createElement("input");
         leg2HomeInput.type = "number";
@@ -365,10 +347,11 @@ function renderKnockout(container, state) {
         tieBlock.appendChild(leg2Row);
       }
 
-      // PENALTIES
+      // Penalties
       const pensRow = document.createElement("div");
       pensRow.style.display = "flex";
       pensRow.style.alignItems = "center";
+      pensRow.style.flexWrap = "wrap";
       pensRow.style.gap = "6px";
       pensRow.style.fontSize = "0.8rem";
 
@@ -397,17 +380,21 @@ function renderKnockout(container, state) {
 
       tieBlock.appendChild(pensRow);
 
-      // WINNER LABEL
+      // Winner label (team name preferred)
       const winnerLabel = document.createElement("div");
       winnerLabel.style.fontSize = "0.8rem";
       winnerLabel.style.color = "#9ca3af";
       winnerLabel.style.marginTop = "2px";
-      winnerLabel.textContent = tie.winner
-        ? `Winner: ${tie.winner.label} (${tie.winner.team.name})`
-        : "Winner: –";
+
+      if (tie.winner) {
+        const winnerName = tie.winner.team?.name || tie.winner.label;
+        winnerLabel.textContent = `Winner: ${winnerName}`;
+      } else {
+        winnerLabel.textContent = "Winner: –";
+      }
+
       tieBlock.appendChild(winnerLabel);
 
-      // LISTENERS
       function parseIntOrNull(value) {
         if (value === "" || value == null) return null;
         const num = Number(value);
@@ -450,7 +437,7 @@ function renderKnockout(container, state) {
 
   container.appendChild(roundsWrapper);
 
-  // 3RD PLACE MATCH – TEAMS AUTOMATIC FROM SEMI-FINAL LOSERS (no manual override)
+  // 3rd place (single match, teams auto from semi-final losers)
   if (state.initialCount >= 4) {
     const thirdCard = document.createElement("div");
     thirdCard.className = "card";
@@ -472,10 +459,10 @@ function renderKnockout(container, state) {
 
     if (state.thirdPlace.teamA && state.thirdPlace.teamB) {
       hint.textContent =
-        "Semi-final losers are auto-selected here for the 3rd place match.";
+        "Semi-finals losers are auto-selected for the 3rd place match.";
     } else {
       hint.textContent =
-        "Once both semi-finals are finished, the losing teams will appear here automatically.";
+        "Once both semi-finals are finished, the losing entries will appear here automatically.";
     }
 
     if (state.thirdPlace.teamA && state.thirdPlace.teamB) {
@@ -486,8 +473,13 @@ function renderKnockout(container, state) {
       row.style.gap = "6px";
       row.style.fontSize = "0.85rem";
 
+      const nameA =
+        state.thirdPlace.teamA.team?.name || state.thirdPlace.teamA.label;
+      const nameB =
+        state.thirdPlace.teamB.team?.name || state.thirdPlace.teamB.label;
+
       const labelTeams = document.createElement("span");
-      labelTeams.textContent = `${state.thirdPlace.teamA.label} (${state.thirdPlace.teamA.team.name}) vs ${state.thirdPlace.teamB.label} (${state.thirdPlace.teamB.team.name})`;
+      labelTeams.textContent = `${nameA} vs ${nameB}`;
       labelTeams.style.marginBottom = "4px";
       labelTeams.style.display = "block";
 

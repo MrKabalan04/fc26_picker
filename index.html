@@ -2,17 +2,16 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>FC26 Team Picker & Tournament</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="style.css" />
   </head>
-
   <body>
     <div class="app">
-      <!-- HEADER -->
+      <!-- ========= HEADER ========= -->
       <header class="app-header">
         <div class="title-block">
-          <h1>BallHub | Powered by Mr Kabalan</h1>
+          <h1>FC26 Session Hub</h1>
           <p class="subtitle">
             Random teams · Custom tournaments · Score tracking
           </p>
@@ -20,12 +19,11 @@
         <div class="pill">Local FIFA Nights</div>
       </header>
 
-      <!-- NAVBAR / TABS -->
+      <!-- ========= MODE TABS ========= -->
       <nav class="card">
         <div class="card-header">
           <div class="card-title">Mode</div>
         </div>
-
         <div class="card-body actions-row" id="mode-tabs">
           <button
             type="button"
@@ -35,7 +33,6 @@
           >
             Team Picker
           </button>
-
           <button
             type="button"
             class="btn-secondary"
@@ -47,16 +44,15 @@
         </div>
       </nav>
 
-      <!-- TAB 1: TEAM PICKER -->
+      <!-- ========= TAB 1: TEAM PICKER ========= -->
       <main id="tab-picker">
         <section class="card">
           <div class="card-header">
             <div class="card-title">Team Picker</div>
           </div>
-
           <div class="card-body">
             <div class="settings-grid">
-              <!-- Player count -->
+              <!-- Players -->
               <div class="field-group">
                 <label for="player-count" class="field-label">Players</label>
                 <input
@@ -65,6 +61,20 @@
                   min="2"
                   max="32"
                   value="4"
+                />
+              </div>
+
+              <!-- Teams per player -->
+              <div class="field-group">
+                <label for="teams-per-player" class="field-label">
+                  Teams per player
+                </label>
+                <input
+                  type="number"
+                  id="teams-per-player"
+                  min="1"
+                  max="4"
+                  value="1"
                 />
               </div>
 
@@ -77,22 +87,22 @@
                 </div>
               </div>
 
-              <!-- League selection -->
+              <!-- Leagues -->
               <div class="field-group field-row">
                 <label class="field-label">Leagues / Pools</label>
                 <div id="league-list" class="league-list"></div>
               </div>
             </div>
 
-            <!-- One per league -->
+            <!-- One team per league -->
             <div class="toggle-row">
               <label class="toggle-label">
                 <input type="checkbox" id="one-per-league" />
                 One team per league
               </label>
               <p class="hint">
-                When enabled, each player will get a team from a different
-                league.
+                When enabled, each player’s first team will come from a
+                different league. Only works with 1 team per player.
               </p>
             </div>
 
@@ -114,12 +124,11 @@
           </div>
         </section>
 
-        <!-- Results -->
+        <!-- Assigned Teams -->
         <section class="card">
           <div class="card-header">
             <div class="card-title">Assigned Teams</div>
           </div>
-
           <div class="card-body">
             <div id="results" class="results-list">
               <p class="placeholder">
@@ -130,14 +139,13 @@
         </section>
       </main>
 
-      <!-- TAB 2: TOURNAMENT -->
+      <!-- ========= TAB 2: TOURNAMENT ========= -->
       <main id="tab-tournament" class="hidden">
-        <!-- Tournament Setup -->
+        <!-- Tournament setup -->
         <section class="card">
           <div class="card-header">
             <div class="card-title">Tournament Setup</div>
           </div>
-
           <div class="card-body">
             <div class="settings-grid">
               <!-- Type -->
@@ -146,54 +154,21 @@
                 <select id="tournament-type">
                   <option value="knockout">Knockout</option>
                   <option value="groups">Group Stage</option>
-                  <option value="groups-knockout">Groups → Knockout</option>
+                  <option value="groups-knockout">Group + Knockout</option>
                 </select>
               </div>
 
-              <!-- Player count -->
-              <div class="field-group">
-                <label class="field-label">Players</label>
-                <input
-                  type="number"
-                  id="tournament-player-count"
-                  min="2"
-                  max="32"
-                  value="4"
-                />
-                <p class="hint">Must match the number of assigned teams.</p>
-              </div>
-
-              <!-- Home & Away in groups -->
-              <div class="field-group">
-                <label class="field-label">
-                  <input type="checkbox" id="groups-home-away" />
-                  Home & Away in group stage
-                </label>
-                <p class="hint">Each team plays twice (home + away).</p>
-              </div>
-
-              <!-- Home & Away in knockout -->
-              <div class="field-group">
-                <label class="field-label">
-                  <input type="checkbox" id="knockout-home-away" />
-                  Home & Away in knockout
-                </label>
-                <p class="hint">Each team plays twice (home + away).</p>
-              </div>
-
-              <!-- Team import -->
+              <!-- Teams source / clear -->
               <div class="field-group field-row">
                 <label class="field-label">Teams source</label>
-
                 <div class="actions-row">
                   <button
                     type="button"
                     id="tournament-use-last"
                     class="btn-primary"
                   >
-                    Use teams from last spin
+                    Generate Tournament
                   </button>
-
                   <button
                     type="button"
                     id="tournament-clear"
@@ -202,14 +177,34 @@
                     Clear tournament
                   </button>
                 </div>
-
                 <p id="tournament-setup-message" class="message"></p>
               </div>
+            </div>
+
+            <!-- 🔹 NEW: Home & away toggles -->
+            <div class="toggle-row">
+              <label class="toggle-label">
+                <input type="checkbox" id="groups-home-away" />
+                Home & away in group stage
+              </label>
+              <p class="hint">
+                Each pair in the group plays 2 legs if this is enabled.
+              </p>
+            </div>
+
+            <div class="toggle-row">
+              <label class="toggle-label">
+                <input type="checkbox" id="knockout-home-away" />
+                Home & away in knockouts (except Final)
+              </label>
+              <p class="hint">
+                All knockout ties use 2 legs, but the Final is always one match.
+              </p>
             </div>
           </div>
         </section>
 
-        <!-- Groups -->
+        <!-- Groups view -->
         <section class="card" id="groups-card" style="display: none">
           <div class="card-header">
             <div class="card-title">Groups</div>
@@ -217,7 +212,7 @@
           <div class="card-body" id="groups-container"></div>
         </section>
 
-        <!-- Knockout -->
+        <!-- Knockout view -->
         <section class="card" id="knockout-card" style="display: none">
           <div class="card-header">
             <div class="card-title">Knockout Bracket</div>
@@ -226,9 +221,8 @@
         </section>
       </main>
 
-      <footer class="app-footer">
-        Built for late-night FC sessions ⚽
-      </footer>
+      <!-- ========= FOOTER ========= -->
+      <footer class="app-footer">Built for late-night FC sessions ⚽</footer>
     </div>
 
     <script type="module" src="main.js"></script>

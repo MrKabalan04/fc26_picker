@@ -7,7 +7,7 @@ let tournamentState = null;
 
 export function initTournament() {
   const typeEl = document.getElementById("tournament-type");
-  const playerCountEl = document.getElementById("tournament-player-count");
+  const playerCountEl = document.getElementById("tournament-player-count"); // now only informational
   const groupsHomeAwayEl = document.getElementById("groups-home-away");
   const knockoutHomeAwayEl = document.getElementById("knockout-home-away");
   const useLastBtn = document.getElementById("tournament-use-last");
@@ -40,11 +40,16 @@ export function initTournament() {
 
   useLastBtn.addEventListener("click", () => {
     const tType = typeEl.value;
-    const count = Number(playerCountEl.value);
-    const groupsHomeAway = !!groupsHomeAwayEl.checked;
-    const knockoutHomeAway = !!knockoutHomeAwayEl.checked;
 
-    const last = getLastAssignments();
+    const groupsHomeAway = groupsHomeAwayEl
+      ? !!groupsHomeAwayEl.checked
+      : false;
+    const knockoutHomeAway = knockoutHomeAwayEl
+      ? !!knockoutHomeAwayEl.checked
+      : false;
+
+    const last = getLastAssignments(); // from teamPicker
+
     if (!Array.isArray(last) || last.length === 0) {
       showSetupMessage(
         "No last spin found. Spin teams first in Team Picker.",
@@ -52,27 +57,86 @@ export function initTournament() {
       );
       return;
     }
-    if (!Number.isFinite(count) || count < 2) {
-      showSetupMessage("Enter a valid player count.", "error");
-      return;
-    }
-    if (last.length < count) {
+
+    // 🔥 Detect multi-team mode: any player that has allTeams with length > 1
+    const multiTeamMode = last.some(
+      (p) => Array.isArray(p.allTeams) && p.allTeams.length > 1
+    );
+
+    let participants = [];
+    let mode = "players"; // or "teams"
+
+    if (!multiTeamMode) {
+      // =========================
+      // SIMPLE MODE: 1 team/player
+      // =========================
+      const maxPlayers = last.length;
+
+      // Just reflect it in the input so UI matches
+      if (playerCountEl) {
+        playerCountEl.value = String(maxPlayers);
+      }
+
+      participants = last.map((p) => ({
+        id: String(p.id),
+        label: p.label, // "Player 1"
+        team: p.team,
+        ownerId: p.id,
+        ownerLabel: p.label
+      }));
+      mode = "players";
+
       showSetupMessage(
-        `You requested ${count} players but only ${last.length} teams exist from last spin.`,
-        "error"
+        `Using ${maxPlayers} players from last spin (1 team each).`,
+        "success"
       );
-      return;
+    } else {
+      // =========================================
+      // MULTI-TEAM MODE: each TEAM is a participant
+      // =========================================
+      const teamEntries = [];
+
+      last.forEach((player) => {
+        const teams =
+          Array.isArray(player.allTeams) && player.allTeams.length > 0
+            ? player.allTeams
+            : player.team
+            ? [player.team]
+            : [];
+
+        teams.forEach((team, idx) => {
+          teamEntries.push({
+            id: `${player.id}-${idx + 1}`,
+            // For display in groups/knockout, we mainly want the TEAM name
+            label: team.name,
+            team,
+            ownerId: player.id,
+            ownerLabel: player.label // "Player X"
+          });
+        });
+      });
+
+      const maxEntries = teamEntries.length;
+
+      participants = teamEntries;
+      mode = "teams";
+
+      // Reflect in input just for info (number of teams)
+      if (playerCountEl) {
+        playerCountEl.value = String(maxEntries);
+      }
+
+      showSetupMessage(
+        `Multi-team mode detected: ${last.length} players, ${maxEntries} teams from last spin.`,
+        "success"
+      );
     }
 
-    const players = last.slice(0, count).map((entry, idx) => ({
-      id: idx + 1,
-      label: `Player ${idx + 1}`,
-      team: entry.team
-    }));
-
+    // Save state
     tournamentState = {
       type: tType,
-      players,
+      mode, // "players" or "teams"
+      participants,
       groupsHomeAway,
       knockoutHomeAway,
       groups: null
@@ -80,14 +144,15 @@ export function initTournament() {
 
     resetTournamentView();
 
+    // ========== RENDER BASED ON TYPE ==========
     if (tType === "knockout") {
       knockoutCard.style.display = "block";
-      generateKnockoutTournament(players, knockoutContainer, {
+      generateKnockoutTournament(participants, knockoutContainer, {
         homeAway: knockoutHomeAway
       });
       groupsCard.style.display = "none";
     } else if (tType === "groups") {
-      const groups = generateGroups(players, "groups", {
+      const groups = generateGroups(participants, "groups", {
         homeAndAway: groupsHomeAway
       });
       tournamentState.groups = groups;
@@ -95,7 +160,7 @@ export function initTournament() {
       groupsCard.style.display = "block";
       knockoutCard.style.display = "none";
     } else if (tType === "groups-knockout") {
-      const groups = generateGroups(players, "groups-knockout", {
+      const groups = generateGroups(participants, "groups-knockout", {
         homeAndAway: groupsHomeAway
       });
       tournamentState.groups = groups;
@@ -122,19 +187,21 @@ export function initTournament() {
           return;
         }
         generateKnockoutTournament(qualified, bracketDiv, {
-          homeAway: knockoutHomeAwayEl.checked
+          homeAway: knockoutHomeAway
         });
       });
 
       knockoutContainer.appendChild(btn);
       knockoutContainer.appendChild(bracketDiv);
     }
-
-    showSetupMessage("Tournament created from last spin.", "success");
   });
 }
 
-// World Cup style: A1 vs B2, B1 vs A2, etc.
+/**
+ * World Cup style pairing:
+ * For each pair of groups (A,B), take:
+ *  A1 vs B2, B1 vs A2
+ */
 function buildQualifiedFromGroups(groups) {
   if (!groups || groups.length === 0) return [];
 
@@ -144,15 +211,21 @@ function buildQualifiedFromGroups(groups) {
 
   const qualified = [];
 
+  function getEntryByStandingRow(group, row) {
+    const pid = row.playerId ?? row.participantId;
+    return group.teams.find((p) => p.id === pid);
+  }
+
   for (let i = 0; i < sortedGroups.length; i += 2) {
     const gA = sortedGroups[i];
     const gB = sortedGroups[i + 1];
 
+    // Odd number of groups → last group alone:
     if (!gB) {
       const tableA = computeTable(gA);
       if (tableA[0]) {
-        const pA1 = gA.teams.find((p) => p.id === tableA[0].playerId);
-        if (pA1) qualified.push(pA1);
+        const a1 = getEntryByStandingRow(gA, tableA[0]);
+        if (a1) qualified.push(a1);
       }
       continue;
     }
@@ -161,13 +234,14 @@ function buildQualifiedFromGroups(groups) {
     const tableB = computeTable(gB);
     if (tableA.length < 2 || tableB.length < 2) continue;
 
-    const a1 = gA.teams.find((p) => p.id === tableA[0].playerId);
-    const a2 = gA.teams.find((p) => p.id === tableA[1].playerId);
-    const b1 = gB.teams.find((p) => p.id === tableB[0].playerId);
-    const b2 = gB.teams.find((p) => p.id === tableB[1].playerId);
+    const a1 = getEntryByStandingRow(gA, tableA[0]);
+    const a2 = getEntryByStandingRow(gA, tableA[1]);
+    const b1 = getEntryByStandingRow(gB, tableB[0]);
+    const b2 = getEntryByStandingRow(gB, tableB[1]);
 
     if (!a1 || !a2 || !b1 || !b2) continue;
 
+    // A1 vs B2, B1 vs A2
     qualified.push(a1, b2, b1, a2);
   }
 

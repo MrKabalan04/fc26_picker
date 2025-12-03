@@ -1,111 +1,143 @@
 // groups.js
 import { shuffle } from "./utils.js";
 
-export function generateGroups(players, mode, { homeAndAway }) {
+/**
+ * entries: [{ id, label, team, ownerId, ownerLabel }]
+ * mode: "groups" | "groups-knockout"
+ * options: { homeAndAway: boolean }
+ */
+export function generateGroups(entries, mode, { homeAndAway = false } = {}) {
+  const n = entries.length;
+  if (n === 0) return [];
+
+  let groupCount;
+
   if (mode === "groups") {
-    // One big group
-    const groupId = "A";
-    const matches = createGroupMatches(players, groupId, homeAndAway);
-    return [{ id: groupId, teams: players, matches }];
+    // Pure group stage: always 1 group
+    groupCount = 1;
+  } else {
+    // groups-knockout: as equal as possible, aiming for ~4 per group
+    // e.g. 6 → 2 groups of 3 & 3, 8 → 2 groups of 4, 12 → 3 groups of 4, etc.
+    if (n <= 4) {
+      groupCount = 1;
+    } else {
+      groupCount = Math.max(2, Math.round(n / 4));
+    }
   }
 
-  // mode === "groups-knockout"
-  const chunks = splitIntoBalancedGroups(players, 4);
-  const labels = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
   const groups = [];
+  for (let i = 0; i < groupCount; i++) {
+    groups.push({
+      id: String.fromCharCode(65 + i), // A, B, C...
+      teams: [],
+      matches: []
+    });
+  }
 
-  chunks.forEach((chunk, idx) => {
-    const id = labels[idx] || `G${idx + 1}`;
-    const matches = createGroupMatches(chunk, id, homeAndAway);
-    groups.push({ id, teams: chunk, matches });
+  // 🔥 IMPORTANT: shuffle entries so teams of same player can land in same group
+  const shuffledEntries = [...entries];
+  shuffle(shuffledEntries);
+
+  // Distribute entries: E0→G0, E1→G1, ..., E(k)→G(k % groupCount)
+  shuffledEntries.forEach((e, idx) => {
+    const gIdx = idx % groupCount;
+    groups[gIdx].teams.push(e);
+  });
+
+  // Build matches per group using round-robin schedule
+  groups.forEach((group) => {
+    group.matches = buildGroupMatches(group.teams, group.id, homeAndAway);
   });
 
   return groups;
 }
 
-// Balanced sizes, priority to equality: e.g. 6 -> 3+3, 10 -> 4+3+3
-function splitIntoBalancedGroups(players, targetSize = 4) {
-  const n = players.length;
-  if (n <= targetSize) return [players.slice()];
+/* ---------- round-robin scheduling helpers ---------- */
 
-  const numGroups = Math.max(2, Math.round(n / targetSize));
-  const baseSize = Math.floor(n / numGroups);
-  let remainder = n % numGroups;
+/**
+ * Create single round-robin rounds for a list of teams.
+ * Returns array of rounds; each round is an array of { home, away } pairs.
+ * Uses "circle method". Supports odd number of teams (adds a bye).
+ */
+function createRoundRobinRounds(teams) {
+  if (teams.length === 0) return [];
 
-  const groups = [];
-  let index = 0;
+  let list = [...teams];
+  const isOdd = list.length % 2 === 1;
 
-  for (let g = 0; g < numGroups; g++) {
-    const size = baseSize + (remainder > 0 ? 1 : 0);
-    if (remainder > 0) remainder--;
-    groups.push(players.slice(index, index + size));
-    index += size;
+  if (isOdd) {
+    // Add a null "bye" so we have an even count
+    list.push(null);
   }
-  return groups;
-}
 
-// Proper round-robin schedule (no immediate rematch)
-function createGroupMatches(teams, groupId, homeAndAway = false) {
-  const base = [...teams];
+  const n = list.length;
   const rounds = [];
 
-  let arr = [...base];
-  let hasBye = false;
+  for (let roundIndex = 0; roundIndex < n - 1; roundIndex++) {
+    const roundMatches = [];
 
-  if (arr.length % 2 === 1) {
-    arr.push(null);
-    hasBye = true;
-  }
-
-  const n = arr.length;
-  const totalRounds = n - 1;
-
-  for (let r = 0; r < totalRounds; r++) {
-    const round = [];
     for (let i = 0; i < n / 2; i++) {
-      const t1 = arr[i];
-      const t2 = arr[n - 1 - i];
-      if (t1 && t2) {
-        round.push({ home: t1, away: t2 });
-      }
-    }
-    rounds.push(round);
+      const t1 = list[i];
+      const t2 = list[n - 1 - i];
 
-    // rotate (circle method)
-    const fixed = arr[0];
-    const rest = arr.slice(1);
+      // Skip bye
+      if (!t1 || !t2) continue;
+
+      roundMatches.push({ home: t1, away: t2 });
+    }
+
+    rounds.push(roundMatches);
+
+    // Rotate all except first element
+    const first = list[0];
+    const rest = list.slice(1);
     rest.unshift(rest.pop());
-    arr = [fixed, ...rest];
+    list = [first, ...rest];
   }
 
-  const matches = [];
-  let matchId = 1;
+  return rounds;
+}
 
-  // First leg
-  rounds.forEach((round) => {
-    round.forEach((pair) => {
+/**
+ * Build group matches from teams using round-robin.
+ * If homeAndAway = false → each pair once.
+ * If homeAndAway = true → first all first-leg rounds, then all second-leg rounds
+ * with reversed home/away (so same fixture is NOT back-to-back).
+ */
+function buildGroupMatches(teams, groupId, homeAndAway) {
+  const matches = [];
+  if (teams.length < 2) return matches;
+
+  // Single round-robin (first legs)
+  const firstLegRounds = createRoundRobinRounds(teams);
+
+  // FIRST-LEG matches
+  firstLegRounds.forEach((round, rIdx) => {
+    round.forEach((pair, mIdx) => {
       matches.push({
-        id: `${groupId}-M${matchId++}`,
-        groupId,
+        id: `G${groupId}-R${rIdx + 1}M${mIdx + 1}`,
         home: pair.home,
         away: pair.away,
         homeGoals: null,
-        awayGoals: null
+        awayGoals: null,
+        leg: 1
       });
     });
   });
 
-  // Second leg (reverse home/away)
   if (homeAndAway) {
-    rounds.forEach((round) => {
-      round.forEach((pair) => {
+    // SECOND-LEG rounds: same pairs, reversed home/away
+    const secondLegStartRound = firstLegRounds.length + 1;
+
+    firstLegRounds.forEach((round, rIdx) => {
+      round.forEach((pair, mIdx) => {
         matches.push({
-          id: `${groupId}-M${matchId++}`,
-          groupId,
+          id: `G${groupId}-R${secondLegStartRound + rIdx}M${mIdx + 1}`,
           home: pair.away,
           away: pair.home,
           homeGoals: null,
-          awayGoals: null
+          awayGoals: null,
+          leg: 2
         });
       });
     });
@@ -114,73 +146,92 @@ function createGroupMatches(teams, groupId, homeAndAway = false) {
   return matches;
 }
 
-// Group table
+/* ---------- table / stats ---------- */
+
+/**
+ * Compute standings for a group
+ * Returns array of:
+ * {
+ *   playerId,        // internal id (entry.id)
+ *   label,           // team name (preferred)
+ *   played, w, d, l,
+ *   gf, ga, gd, pts
+ * }
+ */
 export function computeTable(group) {
   const stats = new Map();
 
-  group.teams.forEach((p) => {
-    stats.set(p.id, {
-      playerId: p.id,
-      label: p.label,
-      teamName: p.team.name,
-      played: 0,
-      wins: 0,
-      draws: 0,
-      losses: 0,
-      gf: 0,
-      ga: 0,
-      gd: 0,
-      pts: 0
-    });
-  });
+  function ensure(entry) {
+    if (!stats.has(entry.id)) {
+      const displayLabel = entry.team?.name || entry.label;
+      stats.set(entry.id, {
+        playerId: entry.id,
+        label: displayLabel,
+        played: 0,
+        w: 0,
+        d: 0,
+        l: 0,
+        gf: 0,
+        ga: 0,
+        get gd() {
+          return this.gf - this.ga;
+        },
+        pts: 0
+      });
+    }
+    return stats.get(entry.id);
+  }
 
   group.matches.forEach((m) => {
+    const hg = m.homeGoals;
+    const ag = m.awayGoals;
+
     if (
-      m.homeGoals == null ||
-      m.awayGoals == null ||
-      m.homeGoals === "" ||
-      m.awayGoals === ""
-    )
-      return;
+      hg == null ||
+      ag == null ||
+      !Number.isInteger(hg) ||
+      !Number.isInteger(ag)
+    ) {
+      return; // not played yet
+    }
 
-    const hg = Number(m.homeGoals);
-    const ag = Number(m.awayGoals);
-    if (!Number.isFinite(hg) || !Number.isFinite(ag)) return;
+    const homeStat = ensure(m.home);
+    const awayStat = ensure(m.away);
 
-    const homeStats = stats.get(m.home.id);
-    const awayStats = stats.get(m.away.id);
+    homeStat.played += 1;
+    awayStat.played += 1;
 
-    homeStats.played++;
-    awayStats.played++;
-    homeStats.gf += hg;
-    homeStats.ga += ag;
-    awayStats.gf += ag;
-    awayStats.ga += hg;
+    homeStat.gf += hg;
+    homeStat.ga += ag;
+    awayStat.gf += ag;
+    awayStat.ga += hg;
 
     if (hg > ag) {
-      homeStats.wins++;
-      awayStats.losses++;
-      homeStats.pts += 3;
-    } else if (hg < ag) {
-      awayStats.wins++;
-      homeStats.losses++;
-      awayStats.pts += 3;
+      homeStat.w += 1;
+      awayStat.l += 1;
+      homeStat.pts += 3;
+    } else if (ag > hg) {
+      awayStat.w += 1;
+      homeStat.l += 1;
+      awayStat.pts += 3;
     } else {
-      homeStats.draws++;
-      awayStats.draws++;
-      homeStats.pts += 1;
-      awayStats.pts += 1;
+      homeStat.d += 1;
+      awayStat.d += 1;
+      homeStat.pts += 1;
+      awayStat.pts += 1;
     }
   });
 
-  stats.forEach((row) => {
-    row.gd = row.gf - row.ga;
-  });
+  // Ensure all entries appear even if they haven't played yet
+  group.teams.forEach((e) => ensure(e));
 
   const table = Array.from(stats.values());
+
+  // Sort: points, GD, GF, then label
   table.sort((a, b) => {
     if (b.pts !== a.pts) return b.pts - a.pts;
-    if (b.gd !== a.gd) return b.gd - a.gd;
+    const gdDiff = b.gd - a.gd;
+    if (gdDiff !== 0) return gdDiff;
     if (b.gf !== a.gf) return b.gf - a.gf;
     return a.label.localeCompare(b.label);
   });
@@ -188,95 +239,10 @@ export function computeTable(group) {
   return table;
 }
 
-// global schedule: 2 matches from each group, then next group
-function buildGlobalSchedule(groups) {
-  if (!groups || groups.length === 0) return [];
-  if (groups.length === 1) {
-    return groups[0].matches.map((m, idx) => ({
-      index: idx + 1,
-      groupId: groups[0].id,
-      match: m
-    }));
-  }
-
-  const queues = groups.map((g) => [...g.matches]);
-  const pointers = new Array(groups.length).fill(0);
-  const totalMatches = queues.reduce((sum, arr) => sum + arr.length, 0);
-
-  const schedule = [];
-  let remaining = totalMatches;
-  let globalIndex = 1;
-
-  while (remaining > 0) {
-    for (let gi = 0; gi < groups.length; gi++) {
-      let taken = 0;
-      while (taken < 2 && pointers[gi] < queues[gi].length) {
-        const match = queues[gi][pointers[gi]++];
-        schedule.push({
-          index: globalIndex++,
-          groupId: groups[gi].id,
-          match
-        });
-        remaining--;
-        taken++;
-      }
-      if (remaining <= 0) break;
-    }
-  }
-
-  return schedule;
-}
-
-function renderGlobalSchedule(groups, container) {
-  const schedule = buildGlobalSchedule(groups);
-  if (!schedule.length) return;
-
-  const schedCard = document.createElement("div");
-  schedCard.className = "card";
-  schedCard.style.marginBottom = "10px";
-
-  const header = document.createElement("div");
-  header.className = "card-header";
-  const title = document.createElement("div");
-  title.className = "card-title";
-  title.textContent = "Suggested Match Order";
-  header.appendChild(title);
-
-  const body = document.createElement("div");
-  body.className = "card-body";
-
-  const hint = document.createElement("p");
-  hint.className = "hint";
-  hint.textContent =
-    "Play 2 matches from each group, then move to the next group. Follow this for equal playtime.";
-  hint.style.marginBottom = "6px";
-
-  const list = document.createElement("div");
-  list.style.display = "flex";
-  list.style.flexDirection = "column";
-  list.style.gap = "4px";
-
-  schedule.forEach((entry) => {
-    const row = document.createElement("div");
-    row.style.fontSize = "0.8rem";
-    row.textContent = `Match ${entry.index}: Group ${entry.groupId} – ${entry.match.home.team.name} vs ${entry.match.away.team.name}`;
-    list.appendChild(row);
-  });
-
-  body.appendChild(hint);
-  body.appendChild(list);
-  schedCard.appendChild(header);
-  schedCard.appendChild(body);
-
-  container.appendChild(schedCard);
-}
+/* ---------- render ---------- */
 
 export function renderGroups(groups, container, mode) {
   container.innerHTML = "";
-
-  if (mode === "groups-knockout") {
-    renderGlobalSchedule(groups, container);
-  }
 
   groups.forEach((group) => {
     const groupCard = document.createElement("div");
@@ -285,85 +251,49 @@ export function renderGroups(groups, container, mode) {
 
     const header = document.createElement("div");
     header.className = "card-header";
+
     const title = document.createElement("div");
     title.className = "card-title";
-    title.textContent =
-      mode === "groups" ? "Group Stage" : `Group ${group.id}`;
+    title.textContent = `Group ${group.id}`;
     header.appendChild(title);
 
     const body = document.createElement("div");
     body.className = "card-body";
+    body.style.display = "flex";
+    body.style.flexDirection = "column";
+    body.style.gap = "8px";
 
-    // Teams list
-    const teamsDiv = document.createElement("div");
-    teamsDiv.style.marginBottom = "8px";
+    // Matches
+    const matchesBlock = document.createElement("div");
+    matchesBlock.style.display = "flex";
+    matchesBlock.style.flexDirection = "column";
+    matchesBlock.style.gap = "4px";
 
-    group.teams.forEach((p) => {
-      const row = document.createElement("div");
-      row.className = "player-card";
-      row.style.marginBottom = "4px";
-
-      const main = document.createElement("div");
-      main.className = "player-main";
-
-      const label = document.createElement("div");
-      label.className = "player-label";
-      label.textContent = p.label;
-
-      const team = document.createElement("div");
-      team.className = "player-team";
-      team.textContent = p.team.name;
-
-      const meta = document.createElement("div");
-      meta.className = "player-meta";
-      meta.textContent = p.team.leagueName;
-
-      main.appendChild(label);
-      main.appendChild(team);
-      main.appendChild(meta);
-
-      const rating = document.createElement("div");
-      rating.className = "player-rating";
-      rating.textContent = `${p.team.stars.toFixed(1)}★`;
-
-      row.appendChild(main);
-      row.appendChild(rating);
-      teamsDiv.appendChild(row);
-    });
-
-    // Matches and score inputs
     const matchesTitle = document.createElement("div");
     matchesTitle.className = "field-label";
-    matchesTitle.textContent = "Matches (enter scores)";
+    matchesTitle.textContent = "Matches";
+    matchesBlock.appendChild(matchesTitle);
 
-    const matchesDiv = document.createElement("div");
-    matchesDiv.style.display = "flex";
-    matchesDiv.style.flexDirection = "column";
-    matchesDiv.style.gap = "4px";
-    matchesDiv.style.marginBottom = "8px";
-
-    const tableContainer = document.createElement("div");
-    const initialTable = computeTable(group);
-    renderGroupTable(group, initialTable, tableContainer);
-
-    group.matches.forEach((match, index) => {
+    group.matches.forEach((match, idx) => {
       const row = document.createElement("div");
       row.style.display = "flex";
+      row.style.flexWrap = "wrap";
       row.style.alignItems = "center";
       row.style.gap = "6px";
       row.style.fontSize = "0.85rem";
 
+      const homeName = match.home.team?.name || match.home.label;
+      const awayName = match.away.team?.name || match.away.label;
+
       const label = document.createElement("span");
-      label.textContent = `Match ${index + 1}: ${match.home.team.name} vs ${match.away.team.name}`;
+      label.textContent = `M${idx + 1}: ${homeName} vs ${awayName}`;
 
       const homeInput = document.createElement("input");
       homeInput.type = "number";
       homeInput.min = "0";
       homeInput.style.width = "40px";
       homeInput.value =
-        match.homeGoals != null && match.homeGoals !== ""
-          ? match.homeGoals
-          : "";
+        match.homeGoals != null ? String(match.homeGoals) : "";
 
       const dash = document.createElement("span");
       dash.textContent = "-";
@@ -373,99 +303,95 @@ export function renderGroups(groups, container, mode) {
       awayInput.min = "0";
       awayInput.style.width = "40px";
       awayInput.value =
-        match.awayGoals != null && match.awayGoals !== ""
-          ? match.awayGoals
-          : "";
+        match.awayGoals != null ? String(match.awayGoals) : "";
 
-      function updateScore() {
-        match.homeGoals =
-          homeInput.value === "" ? null : Number(homeInput.value);
-        match.awayGoals =
-          awayInput.value === "" ? null : Number(awayInput.value);
-
-        const tableData = computeTable(group);
-        renderGroupTable(group, tableData, tableContainer);
+      function parseIntOrNull(value) {
+        if (value === "" || value == null) return null;
+        const num = Number(value);
+        if (!Number.isFinite(num) || num < 0) return null;
+        return Math.floor(num);
       }
 
-      homeInput.addEventListener("input", updateScore);
-      awayInput.addEventListener("input", updateScore);
+      function onChange() {
+        match.homeGoals = parseIntOrNull(homeInput.value);
+        match.awayGoals = parseIntOrNull(awayInput.value);
+        // Re-render all groups so tables refresh
+        renderGroups(groups, container, mode);
+      }
+
+      homeInput.addEventListener("input", onChange);
+      awayInput.addEventListener("input", onChange);
 
       row.appendChild(label);
       row.appendChild(homeInput);
       row.appendChild(dash);
       row.appendChild(awayInput);
-      matchesDiv.appendChild(row);
+
+      matchesBlock.appendChild(row);
     });
 
-    body.appendChild(teamsDiv);
-    body.appendChild(matchesTitle);
-    body.appendChild(matchesDiv);
-    body.appendChild(tableContainer);
+    body.appendChild(matchesBlock);
+
+    // Table
+    const tableTitle = document.createElement("div");
+    tableTitle.className = "field-label";
+    tableTitle.style.marginTop = "8px";
+    tableTitle.textContent = "Table";
+
+    const tableEl = document.createElement("table");
+    tableEl.style.width = "100%";
+    tableEl.style.borderCollapse = "collapse";
+    tableEl.style.fontSize = "0.8rem";
+    tableEl.style.marginTop = "4px";
+
+    const thead = document.createElement("thead");
+    const headRow = document.createElement("tr");
+    const headers = ["Team", "P", "W", "D", "L", "GF", "GA", "GD", "Pts"];
+    headers.forEach((h) => {
+      const th = document.createElement("th");
+      th.textContent = h;
+      th.style.padding = "2px 4px";
+      th.style.borderBottom = "1px solid rgba(55,65,81,0.8)";
+      th.style.textAlign = h === "Team" ? "left" : "right";
+      headRow.appendChild(th);
+    });
+    thead.appendChild(headRow);
+
+    const tbody = document.createElement("tbody");
+    const standings = computeTable(group);
+
+    standings.forEach((row) => {
+      const tr = document.createElement("tr");
+
+      function cell(text, alignRight = false) {
+        const td = document.createElement("td");
+        td.textContent = String(text);
+        td.style.padding = "2px 4px";
+        td.style.textAlign = alignRight ? "right" : "left";
+        return td;
+      }
+
+      tr.appendChild(cell(row.label));
+      tr.appendChild(cell(row.played, true));
+      tr.appendChild(cell(row.w, true));
+      tr.appendChild(cell(row.d, true));
+      tr.appendChild(cell(row.l, true));
+      tr.appendChild(cell(row.gf, true));
+      tr.appendChild(cell(row.ga, true));
+      tr.appendChild(cell(row.gd, true));
+      tr.appendChild(cell(row.pts, true));
+
+      tbody.appendChild(tr);
+    });
+
+    tableEl.appendChild(thead);
+    tableEl.appendChild(tbody);
+
+    body.appendChild(tableTitle);
+    body.appendChild(tableEl);
 
     groupCard.appendChild(header);
     groupCard.appendChild(body);
     container.appendChild(groupCard);
   });
-}
-
-function renderGroupTable(group, tableData, container) {
-  container.innerHTML = "";
-
-  if (!tableData || tableData.length === 0) {
-    const p = document.createElement("p");
-    p.className = "placeholder";
-    p.textContent = "Table updates when you enter scores.";
-    container.appendChild(p);
-    return;
-  }
-
-  const table = document.createElement("table");
-  table.style.width = "100%";
-  table.style.borderCollapse = "collapse";
-  table.style.marginTop = "4px";
-  table.style.fontSize = "0.8rem";
-
-  const thead = document.createElement("thead");
-  const headRow = document.createElement("tr");
-
-  const headers = ["Team", "P", "W", "D", "L", "GF", "GA", "GD", "Pts"];
-  headers.forEach((h) => {
-    const th = document.createElement("th");
-    th.textContent = h;
-    th.style.padding = "2px 4px";
-    th.style.textAlign = h === "Team" ? "left" : "center";
-    th.style.borderBottom = "1px solid rgba(75,85,99,0.8)";
-    headRow.appendChild(th);
-  });
-  thead.appendChild(headRow);
-
-  const tbody = document.createElement("tbody");
-
-  tableData.forEach((row) => {
-    const tr = document.createElement("tr");
-
-    function td(text, align = "center") {
-      const cell = document.createElement("td");
-      cell.textContent = text;
-      cell.style.padding = "2px 4px";
-      cell.style.textAlign = align;
-      return cell;
-    }
-
-    tr.appendChild(td(row.teamName, "left"));
-    tr.appendChild(td(row.played));
-    tr.appendChild(td(row.wins));
-    tr.appendChild(td(row.draws));
-    tr.appendChild(td(row.losses));
-    tr.appendChild(td(row.gf));
-    tr.appendChild(td(row.ga));
-    tr.appendChild(td(row.gd));
-    tr.appendChild(td(row.pts));
-
-    tbody.appendChild(tr);
-  });
-
-  table.appendChild(thead);
-  table.appendChild(tbody);
-  container.appendChild(table);
 }
