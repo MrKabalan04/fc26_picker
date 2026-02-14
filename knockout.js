@@ -1,572 +1,167 @@
 // knockout.js
 import { shuffle } from "./utils.js";
 
-/**
- * entries: [{ id, label, team, ownerId, ownerLabel }]
- * options: { homeAway: boolean }  // homeAway applies to all rounds EXCEPT the Final
- */
 export function generateKnockoutTournament(entries, container, { homeAway }) {
   container.innerHTML = "";
-
   const count = entries.length;
-  const allowed = [2, 4, 8, 16, 32];
-  if (!allowed.includes(count)) {
-    container.innerHTML =
-      "<p class='placeholder'>Knockout currently supports 2, 4, 8, 16, or 32 entries.</p>";
+  if (![2, 4, 8, 16, 32].includes(count)) {
+    container.innerHTML = "<p class='placeholder' style='text-align: center; padding: 40px'>Knockout supports 2, 4, 8, 16, or 32 entries.</p>";
     return;
   }
-
   const shuffled = [...entries];
   shuffle(shuffled);
-
-  const state = {
-    homeAway,
-    initialCount: count,
-    rounds: [], // [{ name, ties: [...] }]
-    participants: shuffled,
-    thirdPlace: {
-      teamA: null,
-      teamB: null,
-      goalsA: null,
-      goalsB: null,
-      pensA: null,
-      pensB: null
-    }
-  };
-
-  const firstRound = createRoundFromParticipants(shuffled, homeAway, 0);
-  state.rounds.push(firstRound);
-
+  const state = { homeAway, initialCount: count, rounds: [], participants: shuffled, thirdPlace: { teamA: null, teamB: null, goalsA: null, goalsB: null, pensA: null, pensB: null } };
+  state.rounds.push(createRoundFromParticipants(shuffled, homeAway, 0));
   renderKnockout(container, state);
 }
-
-/* ---------- helpers: model ---------- */
 
 function roundNameForCount(count) {
   if (count === 2) return "Final";
   if (count === 4) return "Semi-finals";
   if (count === 8) return "Quarter-finals";
   if (count === 16) return "Round of 16";
-  if (count === 32) return "Round of 32";
-  return "Knockout";
+  return "Round of 32";
 }
 
-/**
- * For the Final (2 entries), force single-leg (twoLegged = false).
- */
 function createRoundFromParticipants(participants, homeAway, depth) {
   const roundSize = participants.length;
   const name = roundNameForCount(roundSize);
-
-  const twoLeggedForThisRound = homeAway && roundSize > 2;
-
+  const twoLegged = homeAway && roundSize > 2;
   const ties = [];
   for (let i = 0; i < participants.length; i += 2) {
-    const home = participants[i];
-    const away = participants[i + 1];
-    if (!home || !away) continue;
-
-    ties.push({
-      id: `R${depth + 1}-T${i / 2 + 1}`,
-      home,
-      away,
-      twoLegged: twoLeggedForThisRound,
-      leg1HomeGoals: null,
-      leg1AwayGoals: null,
-      leg2HomeGoals: twoLeggedForThisRound ? null : null,
-      leg2AwayGoals: twoLeggedForThisRound ? null : null,
-      pensHome: null,
-      pensAway: null,
-      winner: null,
-      loser: null
-    });
+    ties.push({ id: `R${depth + 1}-T${i / 2 + 1}`, home: participants[i], away: participants[i + 1], twoLegged, leg1HomeGoals: null, leg1AwayGoals: null, leg2HomeGoals: null, leg2AwayGoals: null, pensHome: null, pensAway: null, winner: null, loser: null });
   }
-
   return { name, ties };
 }
 
 function computeTieWinner(tie) {
-  const {
-    twoLegged,
-    leg1HomeGoals,
-    leg1AwayGoals,
-    leg2HomeGoals,
-    leg2AwayGoals,
-    pensHome,
-    pensAway
-  } = tie;
-
   const valid = (v) => Number.isInteger(v) && v >= 0;
-
-  // SINGLE-LEG (includes Final)
-  if (!twoLegged) {
-    if (!valid(leg1HomeGoals) || !valid(leg1AwayGoals)) return null;
-
-    if (leg1HomeGoals > leg1AwayGoals) {
-      return { winner: tie.home, loser: tie.away };
-    }
-    if (leg1AwayGoals > leg1HomeGoals) {
-      return { winner: tie.away, loser: tie.home };
-    }
-
-    // Draw -> penalties
-    if (valid(pensHome) && valid(pensAway) && pensHome !== pensAway) {
-      return pensHome > pensAway
-        ? { winner: tie.home, loser: tie.away }
-        : { winner: tie.away, loser: tie.home };
+  if (!tie.twoLegged) {
+    if (!valid(tie.leg1HomeGoals) || !valid(tie.leg1AwayGoals)) return null;
+    if (tie.leg1HomeGoals > tie.leg1AwayGoals) return { winner: tie.home, loser: tie.away };
+    if (tie.leg1AwayGoals > tie.leg1HomeGoals) return { winner: tie.away, loser: tie.home };
+    if (valid(tie.pensHome) && valid(tie.pensAway) && tie.pensHome !== tie.pensAway) {
+      return tie.pensHome > tie.pensAway ? { winner: tie.home, loser: tie.away } : { winner: tie.away, loser: tie.home };
     }
     return null;
   }
-
-  // TWO-LEGGED (not final)
-  if (
-    !valid(leg1HomeGoals) ||
-    !valid(leg1AwayGoals) ||
-    !valid(leg2HomeGoals) ||
-    !valid(leg2AwayGoals)
-  ) {
-    return null;
+  if (!valid(tie.leg1HomeGoals) || !valid(tie.leg1AwayGoals) || !valid(tie.leg2HomeGoals) || !valid(tie.leg2AwayGoals)) return null;
+  const h = tie.leg1HomeGoals + tie.leg2AwayGoals;
+  const a = tie.leg1AwayGoals + tie.leg2HomeGoals;
+  if (h > a) return { winner: tie.home, loser: tie.away };
+  if (a > h) return { winner: tie.away, loser: tie.home };
+  if (valid(tie.pensHome) && valid(tie.pensAway) && tie.pensHome !== tie.pensAway) {
+    return tie.pensHome > tie.pensAway ? { winner: tie.home, loser: tie.away } : { winner: tie.away, loser: tie.home };
   }
-
-  const totalHome = leg1HomeGoals + leg2AwayGoals;
-  const totalAway = leg1AwayGoals + leg2HomeGoals;
-
-  if (totalHome > totalAway) {
-    return { winner: tie.home, loser: tie.away };
-  }
-  if (totalAway > totalHome) {
-    return { winner: tie.away, loser: tie.home };
-  }
-
-  if (valid(pensHome) && valid(pensAway) && pensHome !== pensAway) {
-    return pensHome > pensAway
-      ? { winner: tie.home, loser: tie.away }
-      : { winner: tie.away, loser: tie.home };
-  }
-
   return null;
 }
 
 function recompute(state) {
-  const maxRounds = Math.log2(state.initialCount);
-
+  const maxR = Math.log2(state.initialCount);
   for (let r = 0; r < state.rounds.length; r++) {
     const round = state.rounds[r];
     const winners = [];
-
-    round.ties.forEach((tie) => {
-      const result = computeTieWinner(tie);
-      if (result) {
-        tie.winner = result.winner;
-        tie.loser = result.loser;
-        winners.push(result.winner);
-      } else {
-        tie.winner = null;
-        tie.loser = null;
-      }
+    round.ties.forEach(tie => {
+      const res = computeTieWinner(tie);
+      if (res) { tie.winner = res.winner; tie.loser = res.loser; winners.push(res.winner); }
+      else { tie.winner = null; tie.loser = null; }
     });
-
-    const allDecided = winners.length === round.ties.length;
-
-    if (
-      r === state.rounds.length - 1 &&
-      allDecided &&
-      winners.length > 1 &&
-      state.rounds.length < maxRounds
-    ) {
-      const nextRound = createRoundFromParticipants(
-        winners,
-        state.homeAway,
-        state.rounds.length
-      );
-      state.rounds.push(nextRound);
+    if (r === state.rounds.length - 1 && winners.length === round.ties.length && winners.length > 1 && state.rounds.length < maxR) {
+      state.rounds.push(createRoundFromParticipants(winners, state.homeAway, state.rounds.length));
     }
   }
-
-  updateThirdPlaceFromSemis(state);
+  updateThirdPlace(state);
 }
 
-function updateThirdPlaceFromSemis(state) {
-  if (state.initialCount < 4) {
-    state.thirdPlace.teamA = null;
-    state.thirdPlace.teamB = null;
-    state.thirdPlace.goalsA = null;
-    state.thirdPlace.goalsB = null;
-    state.thirdPlace.pensA = null;
-    state.thirdPlace.pensB = null;
-    return;
-  }
-
-  const semiRound = state.rounds.find((r) => r.name === "Semi-finals");
-  if (!semiRound) {
-    state.thirdPlace.teamA = null;
-    state.thirdPlace.teamB = null;
-    state.thirdPlace.goalsA = null;
-    state.thirdPlace.goalsB = null;
-    state.thirdPlace.pensA = null;
-    state.thirdPlace.pensB = null;
-    return;
-  }
-
-  const losers = semiRound.ties
-    .map((tie) => tie.loser)
-    .filter((loser) => !!loser);
-
-  if (losers.length === 2) {
-    state.thirdPlace.teamA = losers[0];
-    state.thirdPlace.teamB = losers[1];
-  } else {
-    state.thirdPlace.teamA = null;
-    state.thirdPlace.teamB = null;
-    state.thirdPlace.goalsA = null;
-    state.thirdPlace.goalsB = null;
-    state.thirdPlace.pensA = null;
-    state.thirdPlace.pensB = null;
-  }
+function updateThirdPlace(state) {
+  if (state.initialCount < 4) return;
+  const semi = state.rounds.find(r => r.name === "Semi-finals");
+  if (!semi) return;
+  const losers = semi.ties.map(t => t.loser).filter(l => !!l);
+  if (losers.length === 2) { state.thirdPlace.teamA = losers[0]; state.thirdPlace.teamB = losers[1]; }
 }
-
-/* ---------- view ---------- */
 
 function renderKnockout(container, state) {
   container.innerHTML = "";
+  const wrapper = document.createElement("div");
+  wrapper.style.display = "flex";
+  wrapper.style.flexDirection = "column";
+  wrapper.style.gap = "20px";
 
-  const title = document.createElement("div");
-  title.className = "field-label";
-  title.textContent = "Knockout Bracket";
-  container.appendChild(title);
+  state.rounds.forEach(round => {
+    const roundDiv = document.createElement("div");
+    roundDiv.className = "card";
+    roundDiv.innerHTML = `
+      <div class="card-header"><div class="card-title">${round.name}</div></div>
+      <div class="card-body" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px"></div>
+    `;
+    const body = roundDiv.querySelector(".card-body");
+    round.ties.forEach((tie, idx) => {
+      const tieDiv = document.createElement("div");
+      tieDiv.style.background = "rgba(15, 23, 42, 0.4)";
+      tieDiv.style.padding = "16px";
+      tieDiv.style.borderRadius = "16px";
+      tieDiv.style.border = "1px solid var(--border-color)";
 
-  const roundsWrapper = document.createElement("div");
-  roundsWrapper.style.display = "flex";
-  roundsWrapper.style.flexDirection = "column";
-  roundsWrapper.style.gap = "10px";
-  roundsWrapper.style.marginTop = "6px";
-
-  state.rounds.forEach((round) => {
-    const roundCard = document.createElement("div");
-    roundCard.className = "card";
-
-    const header = document.createElement("div");
-    header.className = "card-header";
-
-    const hTitle = document.createElement("div");
-    hTitle.className = "card-title";
-    hTitle.textContent = round.name;
-    header.appendChild(hTitle);
-
-    const body = document.createElement("div");
-    body.className = "card-body";
-    body.style.display = "flex";
-    body.style.flexDirection = "column";
-    body.style.gap = "8px";
-
-    round.ties.forEach((tie, tieIndex) => {
-      const tieBlock = document.createElement("div");
-      tieBlock.style.display = "flex";
-      tieBlock.style.flexDirection = "column";
-      tieBlock.style.gap = "4px";
-
-      // 🔥 Prefer team names if available
       const homeName = tie.home.team?.name || tie.home.label;
       const awayName = tie.away.team?.name || tie.away.label;
 
-      const info = document.createElement("div");
-      info.style.fontSize = "0.85rem";
-      info.textContent = `Match ${tieIndex + 1}: ${homeName} vs ${awayName}`;
-      tieBlock.appendChild(info);
+      tieDiv.innerHTML = `
+        <div style="font-size: 0.8rem; font-weight: 800; color: var(--text-dim); margin-bottom: 12px; text-transform: uppercase">Match ${idx + 1}</div>
+        <div class="tie-legs" style="display: flex; flex-direction: column; gap: 8px"></div>
+        ${tie.winner ? `<div style="margin-top: 12px; font-size: 0.85rem; color: var(--success); font-weight: 700; text-align: center; background: rgba(34,197,94,0.1); padding: 4px; border-radius: 8px">Proceeds: ${tie.winner.team?.name || tie.winner.label}</div>` : ''}
+      `;
 
-      // LEG 1
-      const leg1Row = document.createElement("div");
-      leg1Row.style.display = "flex";
-      leg1Row.style.alignItems = "center";
-      leg1Row.style.flexWrap = "wrap";
-      leg1Row.style.gap = "6px";
-      leg1Row.style.fontSize = "0.85rem";
+      const legs = tieDiv.querySelector(".tie-legs");
+      const addLeg = (n, h, a, hV, aV) => {
+        const l = document.createElement("div");
+        l.style.display = "flex";
+        l.style.alignItems = "center";
+        l.style.justifyContent = "space-between";
+        l.innerHTML = `
+          <span style="font-size: 0.85rem; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">${h}</span>
+          <div style="display: flex; align-items: center; gap: 4px; margin: 0 10px">
+            <input type="number" min="0" class="score h" value="${hV ?? ''}" style="width: 44px; text-align: center; padding: 4px">
+            <span style="opacity: 0.5">-</span>
+            <input type="number" min="0" class="score a" value="${aV ?? ''}" style="width: 44px; text-align: center; padding: 4px">
+          </div>
+          <span style="font-size: 0.85rem; flex: 1; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">${a}</span>
+        `;
+        legs.appendChild(l);
+        return { h: l.querySelector(".h"), a: l.querySelector(".a") };
+      };
 
-      const leg1Label = document.createElement("span");
-      leg1Label.textContent = `Leg 1: ${homeName} vs ${awayName}`;
+      const leg1 = addLeg(1, homeName, awayName, tie.leg1HomeGoals, tie.leg1AwayGoals);
+      leg1.h.addEventListener("input", e => { tie.leg1HomeGoals = e.target.value === "" ? null : parseInt(e.target.value); recompute(state); renderKnockout(container, state); });
+      leg1.a.addEventListener("input", e => { tie.leg1AwayGoals = e.target.value === "" ? null : parseInt(e.target.value); recompute(state); renderKnockout(container, state); });
 
-      const leg1Home = document.createElement("input");
-      leg1Home.type = "number";
-      leg1Home.min = "0";
-      leg1Home.style.width = "40px";
-      leg1Home.value =
-        tie.leg1HomeGoals != null ? String(tie.leg1HomeGoals) : "";
-
-      const dash1 = document.createElement("span");
-      dash1.textContent = "-";
-
-      const leg1Away = document.createElement("input");
-      leg1Away.type = "number";
-      leg1Away.min = "0";
-      leg1Away.style.width = "40px";
-      leg1Away.value =
-        tie.leg1AwayGoals != null ? String(tie.leg1AwayGoals) : "";
-
-      leg1Row.appendChild(leg1Label);
-      leg1Row.appendChild(leg1Home);
-      leg1Row.appendChild(dash1);
-      leg1Row.appendChild(leg1Away);
-
-      tieBlock.appendChild(leg1Row);
-
-      // LEG 2 (if twoLegged)
-      let leg2HomeInput, leg2AwayInput;
       if (tie.twoLegged) {
-        const leg2Row = document.createElement("div");
-        leg2Row.style.display = "flex";
-        leg2Row.style.alignItems = "center";
-        leg2Row.style.flexWrap = "wrap";
-        leg2Row.style.gap = "6px";
-        leg2Row.style.fontSize = "0.85rem";
-
-        const leg2Label = document.createElement("span");
-        leg2Label.textContent = `Leg 2: ${awayName} vs ${homeName}`;
-
-        leg2HomeInput = document.createElement("input");
-        leg2HomeInput.type = "number";
-        leg2HomeInput.min = "0";
-        leg2HomeInput.style.width = "40px";
-        leg2HomeInput.value =
-          tie.leg2HomeGoals != null ? String(tie.leg2HomeGoals) : "";
-
-        const dash2 = document.createElement("span");
-        dash2.textContent = "-";
-
-        leg2AwayInput = document.createElement("input");
-        leg2AwayInput.type = "number";
-        leg2AwayInput.min = "0";
-        leg2AwayInput.style.width = "40px";
-        leg2AwayInput.value =
-          tie.leg2AwayGoals != null ? String(tie.leg2AwayGoals) : "";
-
-        leg2Row.appendChild(leg2Label);
-        leg2Row.appendChild(leg2HomeInput);
-        leg2Row.appendChild(dash2);
-        leg2Row.appendChild(leg2AwayInput);
-
-        tieBlock.appendChild(leg2Row);
+        const leg2 = addLeg(2, awayName, homeName, tie.leg2HomeGoals, tie.leg2AwayGoals);
+        leg2.h.addEventListener("input", e => { tie.leg2HomeGoals = e.target.value === "" ? null : parseInt(e.target.value); recompute(state); renderKnockout(container, state); });
+        leg2.a.addEventListener("input", e => { tie.leg2AwayGoals = e.target.value === "" ? null : parseInt(e.target.value); recompute(state); renderKnockout(container, state); });
       }
 
-      // Penalties
-      const pensRow = document.createElement("div");
-      pensRow.style.display = "flex";
-      pensRow.style.alignItems = "center";
-      pensRow.style.flexWrap = "wrap";
-      pensRow.style.gap = "6px";
-      pensRow.style.fontSize = "0.8rem";
+      const penRow = document.createElement("div");
+      penRow.style.marginTop = "8px";
+      penRow.style.paddingTop = "8px";
+      penRow.style.borderTop = "1px dashed var(--border-color)";
+      penRow.style.display = "flex";
+      penRow.style.alignItems = "center";
+      penRow.style.justifyContent = "center";
+      penRow.style.gap = "8px";
+      penRow.innerHTML = `
+        <span style="font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700">Pens:</span>
+        <input type="number" min="0" class="p-h" value="${tie.pensHome ?? ''}" style="width: 40px; text-align: center; padding: 2px; font-size: 0.8rem">
+        <span style="opacity: 0.5">-</span>
+        <input type="number" min="0" class="p-a" value="${tie.pensAway ?? ''}" style="width: 40px; text-align: center; padding: 2px; font-size: 0.8rem">
+      `;
+      tieDiv.appendChild(penRow);
+      penRow.querySelector(".p-h").addEventListener("input", e => { tie.pensHome = e.target.value === "" ? null : parseInt(e.target.value); recompute(state); renderKnockout(container, state); });
+      penRow.querySelector(".p-a").addEventListener("input", e => { tie.pensAway = e.target.value === "" ? null : parseInt(e.target.value); recompute(state); renderKnockout(container, state); });
 
-      const pensLabel = document.createElement("span");
-      pensLabel.textContent = "Penalties (if needed):";
-
-      const pensHome = document.createElement("input");
-      pensHome.type = "number";
-      pensHome.min = "0";
-      pensHome.style.width = "40px";
-      pensHome.value = tie.pensHome != null ? String(tie.pensHome) : "";
-
-      const dashP = document.createElement("span");
-      dashP.textContent = "-";
-
-      const pensAway = document.createElement("input");
-      pensAway.type = "number";
-      pensAway.min = "0";
-      pensAway.style.width = "40px";
-      pensAway.value = tie.pensAway != null ? String(tie.pensAway) : "";
-
-      pensRow.appendChild(pensLabel);
-      pensRow.appendChild(pensHome);
-      pensRow.appendChild(dashP);
-      pensRow.appendChild(pensAway);
-
-      tieBlock.appendChild(pensRow);
-
-      // Winner label (team name preferred)
-      const winnerLabel = document.createElement("div");
-      winnerLabel.style.fontSize = "0.8rem";
-      winnerLabel.style.color = "#9ca3af";
-      winnerLabel.style.marginTop = "2px";
-
-      if (tie.winner) {
-        const winnerName = tie.winner.team?.name || tie.winner.label;
-        winnerLabel.textContent = `Winner: ${winnerName}`;
-      } else {
-        winnerLabel.textContent = "Winner: –";
-      }
-
-      tieBlock.appendChild(winnerLabel);
-
-      function parseIntOrNull(value) {
-        if (value === "" || value == null) return null;
-        const num = Number(value);
-        if (!Number.isFinite(num) || num < 0) return null;
-        return Math.floor(num);
-      }
-
-      function onChange() {
-        tie.leg1HomeGoals = parseIntOrNull(leg1Home.value);
-        tie.leg1AwayGoals = parseIntOrNull(leg1Away.value);
-
-        if (tie.twoLegged) {
-          tie.leg2HomeGoals = parseIntOrNull(leg2HomeInput.value);
-          tie.leg2AwayGoals = parseIntOrNull(leg2AwayInput.value);
-        }
-
-        tie.pensHome = parseIntOrNull(pensHome.value);
-        tie.pensAway = parseIntOrNull(pensAway.value);
-
-        recompute(state);
-        renderKnockout(container, state);
-      }
-
-      leg1Home.addEventListener("input", onChange);
-      leg1Away.addEventListener("input", onChange);
-      pensHome.addEventListener("input", onChange);
-      pensAway.addEventListener("input", onChange);
-      if (tie.twoLegged) {
-        leg2HomeInput.addEventListener("input", onChange);
-        leg2AwayInput.addEventListener("input", onChange);
-      }
-
-      body.appendChild(tieBlock);
+      body.appendChild(tieDiv);
     });
-
-    roundCard.appendChild(header);
-    roundCard.appendChild(body);
-    roundsWrapper.appendChild(roundCard);
+    wrapper.appendChild(roundDiv);
   });
-
-  container.appendChild(roundsWrapper);
-
-  // 3rd place (single match, teams auto from semi-final losers)
-  if (state.initialCount >= 4) {
-    const thirdCard = document.createElement("div");
-    thirdCard.className = "card";
-    thirdCard.style.marginTop = "10px";
-
-    const h = document.createElement("div");
-    h.className = "card-header";
-    const t = document.createElement("div");
-    t.className = "card-title";
-    t.textContent = "3rd Place Match";
-    h.appendChild(t);
-
-    const b = document.createElement("div");
-    b.className = "card-body";
-
-    const hint = document.createElement("p");
-    hint.className = "hint";
-    hint.style.marginBottom = "6px";
-
-    if (state.thirdPlace.teamA && state.thirdPlace.teamB) {
-      hint.textContent =
-        "Semi-finals losers are auto-selected for the 3rd place match.";
-    } else {
-      hint.textContent =
-        "Once both semi-finals are finished, the losing entries will appear here automatically.";
-    }
-
-    if (state.thirdPlace.teamA && state.thirdPlace.teamB) {
-      const row = document.createElement("div");
-      row.style.display = "flex";
-      row.style.flexWrap = "wrap";
-      row.style.alignItems = "center";
-      row.style.gap = "6px";
-      row.style.fontSize = "0.85rem";
-
-      const nameA =
-        state.thirdPlace.teamA.team?.name || state.thirdPlace.teamA.label;
-      const nameB =
-        state.thirdPlace.teamB.team?.name || state.thirdPlace.teamB.label;
-
-      const labelTeams = document.createElement("span");
-      labelTeams.textContent = `${nameA} vs ${nameB}`;
-      labelTeams.style.marginBottom = "4px";
-      labelTeams.style.display = "block";
-
-      const scoreA = document.createElement("input");
-      scoreA.type = "number";
-      scoreA.min = "0";
-      scoreA.style.width = "40px";
-      scoreA.value =
-        state.thirdPlace.goalsA != null
-          ? String(state.thirdPlace.goalsA)
-          : "";
-
-      const dash = document.createElement("span");
-      dash.textContent = "-";
-
-      const scoreB = document.createElement("input");
-      scoreB.type = "number";
-      scoreB.min = "0";
-      scoreB.style.width = "40px";
-      scoreB.value =
-        state.thirdPlace.goalsB != null
-          ? String(state.thirdPlace.goalsB)
-          : "";
-
-      const pensLabel = document.createElement("span");
-      pensLabel.textContent = "Penalties (if needed):";
-      pensLabel.style.marginLeft = "10px";
-
-      const pensA = document.createElement("input");
-      pensA.type = "number";
-      pensA.min = "0";
-      pensA.style.width = "40px";
-      pensA.value =
-        state.thirdPlace.pensA != null
-          ? String(state.thirdPlace.pensA)
-          : "";
-
-      const dashP = document.createElement("span");
-      dashP.textContent = "-";
-
-      const pensB = document.createElement("input");
-      pensB.type = "number";
-      pensB.min = "0";
-      pensB.style.width = "40px";
-      pensB.value =
-        state.thirdPlace.pensB != null
-          ? String(state.thirdPlace.pensB)
-          : "";
-
-      function parseIntOrNull(value) {
-        if (value === "" || value == null) return null;
-        const num = Number(value);
-        if (!Number.isFinite(num) || num < 0) return null;
-        return Math.floor(num);
-      }
-
-      scoreA.addEventListener("input", () => {
-        state.thirdPlace.goalsA = parseIntOrNull(scoreA.value);
-      });
-
-      scoreB.addEventListener("input", () => {
-        state.thirdPlace.goalsB = parseIntOrNull(scoreB.value);
-      });
-
-      pensA.addEventListener("input", () => {
-        state.thirdPlace.pensA = parseIntOrNull(pensA.value);
-      });
-
-      pensB.addEventListener("input", () => {
-        state.thirdPlace.pensB = parseIntOrNull(pensB.value);
-      });
-
-      row.appendChild(scoreA);
-      row.appendChild(dash);
-      row.appendChild(scoreB);
-      row.appendChild(pensLabel);
-      row.appendChild(pensA);
-      row.appendChild(dashP);
-      row.appendChild(pensB);
-
-      b.appendChild(labelTeams);
-      b.appendChild(row);
-    }
-
-    b.prepend(hint);
-    thirdCard.appendChild(h);
-    thirdCard.appendChild(b);
-    container.appendChild(thirdCard);
-  }
+  container.appendChild(wrapper);
 }

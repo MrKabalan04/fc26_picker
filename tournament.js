@@ -7,7 +7,7 @@ let tournamentState = null;
 
 export function initTournament() {
   const typeEl = document.getElementById("tournament-type");
-  const playerCountEl = document.getElementById("tournament-player-count"); // now only informational
+  const playerCountEl = document.getElementById("tournament-player-count");
   const groupsHomeAwayEl = document.getElementById("groups-home-away");
   const knockoutHomeAwayEl = document.getElementById("knockout-home-away");
   const useLastBtn = document.getElementById("tournament-use-last");
@@ -101,8 +101,8 @@ export function initTournament() {
           Array.isArray(player.allTeams) && player.allTeams.length > 0
             ? player.allTeams
             : player.team
-            ? [player.team]
-            : [];
+              ? [player.team]
+              : [];
 
         teams.forEach((team, idx) => {
           teamEntries.push({

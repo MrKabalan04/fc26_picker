@@ -8,10 +8,20 @@ const ALL_TEAMS = [...TEAMS, ...National];
 const STORAGE_KEY = "fc26-team-picker-settings";
 
 let lastAssignments = []; // [{ id, label, team, allTeams: [...], isLocked }]
+let customPlayerLabels = []; // ["Name 1", "Name 2", ...]
 
-// Used by tournament.js
 export function getLastAssignments() {
   return lastAssignments;
+}
+
+export function updatePlayersFromWheel(names) {
+  const playerCountEl = document.getElementById("player-count");
+  if (playerCountEl) {
+    playerCountEl.value = names.length;
+    // Trigger input event to persist settings
+    playerCountEl.dispatchEvent(new Event('input'));
+  }
+  customPlayerLabels = [...names];
 }
 
 export function initTeamPicker() {
@@ -99,7 +109,7 @@ export function initTeamPicker() {
 
   function showMessage(text, type = "") {
     messageEl.textContent = text;
-    messageEl.classList.remove("message--error", "message--success");
+    messageEl.className = "message";
     if (type === "error") messageEl.classList.add("message--error");
     if (type === "success") messageEl.classList.add("message--success");
   }
@@ -108,9 +118,7 @@ export function initTeamPicker() {
     const settings = {
       selectedLeagueIds: getSelectedLeagueIds(),
       playerCount: Number(playerCountEl.value) || 0,
-      teamsPerPlayer: teamsPerPlayerEl
-        ? Number(teamsPerPlayerEl.value) || 1
-        : 1,
+      teamsPerPlayer: teamsPerPlayerEl ? Number(teamsPerPlayerEl.value) || 1 : 1,
       minRating: parseFloat(ratingMinEl.value),
       maxRating: parseFloat(ratingMaxEl.value),
       onlyOnePerLeague: onePerLeagueEl.checked
@@ -120,9 +128,7 @@ export function initTeamPicker() {
 
   leagueListEl.addEventListener("change", persistSettings);
   playerCountEl.addEventListener("input", persistSettings);
-  if (teamsPerPlayerEl) {
-    teamsPerPlayerEl.addEventListener("input", persistSettings);
-  }
+  if (teamsPerPlayerEl) teamsPerPlayerEl.addEventListener("input", persistSettings);
   ratingMinEl.addEventListener("change", persistSettings);
   ratingMaxEl.addEventListener("change", persistSettings);
   onePerLeagueEl.addEventListener("change", persistSettings);
@@ -130,28 +136,14 @@ export function initTeamPicker() {
   // ========== Reset ==========
   clearSettingsBtn.addEventListener("click", () => {
     localStorage.removeItem(STORAGE_KEY);
-    leagueListEl
-      .querySelectorAll("input[type=checkbox]")
-      .forEach((cb) => (cb.checked = true));
-    playerCountEl.value = "4";
-    if (teamsPerPlayerEl) teamsPerPlayerEl.value = "1";
-    ratingMinEl.value = "4.5";
-    ratingMaxEl.value = "5.0";
-    onePerLeagueEl.checked = false;
-    showMessage("Settings reset to defaults.", "success");
-    resultsEl.innerHTML =
-      '<p class="placeholder">Set your options and press <strong>Spin teams</strong>.</p>';
-    // Locks reset because assignments are effectively cleared
-    lastAssignments = [];
+    location.reload();
   });
 
   // ========== Generate ==========
-  generateBtn.addEventListener("click", () => {
+  generateBtn.addEventListener("click", async () => {
     const selectedLeagueIds = getSelectedLeagueIds();
     const playerCount = Number(playerCountEl.value);
-    const teamsPerPlayer = teamsPerPlayerEl
-      ? Number(teamsPerPlayerEl.value)
-      : 1;
+    const teamsPerPlayer = teamsPerPlayerEl ? Number(teamsPerPlayerEl.value) : 1;
     let minRating = parseFloat(ratingMinEl.value);
     let maxRating = parseFloat(ratingMaxEl.value);
     const onlyOnePerLeague = onePerLeagueEl.checked;
@@ -164,27 +156,21 @@ export function initTeamPicker() {
       showMessage("Teams per player must be at least 1.", "error");
       return;
     }
-    if (teamsPerPlayer > 4) {
-      showMessage("Maximum 4 teams per player for now.", "error");
-      return;
-    }
 
     if (selectedLeagueIds.length === 0) {
       showMessage("Select at least one league.", "error");
       return;
     }
-    if (!Number.isFinite(minRating) || !Number.isFinite(maxRating)) {
-      showMessage("Select a valid rating range.", "error");
-      return;
-    }
 
-    if (minRating > maxRating) {
-      [minRating, maxRating] = [maxRating, minRating];
-      ratingMinEl.value = String(minRating);
-      ratingMaxEl.value = String(maxRating);
-    }
+    // Animation state
+    generateBtn.disabled = true;
+    generateBtn.textContent = "Spinning...";
+    resultsEl.innerHTML = '<div style="width: 100%; text-align: center; padding: 40px; color: var(--text-dim);">Scouting the world for the best squads...</div>';
 
-    // Filter pool by league + rating
+    // Simulate delay for effect
+    await new Promise(r => setTimeout(r, 800));
+
+    // Filter pool
     let pool = ALL_TEAMS.filter(
       (team) =>
         selectedLeagueIds.includes(team.leagueId) &&
@@ -193,273 +179,130 @@ export function initTeamPicker() {
     );
 
     if (pool.length === 0) {
-      showMessage(
-        "No teams match this rating range in the selected leagues.",
-        "error"
-      );
-      resultsEl.innerHTML =
-        '<p class="placeholder">Try widening the rating range or adding more leagues.</p>';
+      showMessage("No teams match this rating range.", "error");
+      generateBtn.disabled = false;
+      generateBtn.textContent = "Spin Squads";
       return;
     }
 
     const totalTeamsNeeded = playerCount * teamsPerPlayer;
-
     if (onlyOnePerLeague && teamsPerPlayer > 1) {
-      showMessage(
-        "One team per league mode only works when each player has 1 team.",
-        "error"
-      );
+      showMessage("One team per league only works with 1 team per player.", "error");
+      generateBtn.disabled = false;
+      generateBtn.textContent = "Spin Squads";
       return;
     }
 
-    // ====== LOCK LOGIC STARTS HERE ======
-    // Try to reuse locked players from lastAssignments if it matches the structure
     const prev = Array.isArray(lastAssignments) ? lastAssignments : [];
     const newPlayers = new Array(playerCount);
     const lockedTeamsFlat = [];
 
+    // Apply Locks
     for (let i = 0; i < playerCount; i++) {
       const prevP = prev[i];
-      if (
-        prevP &&
-        prevP.isLocked &&
-        Array.isArray(prevP.allTeams) &&
-        prevP.allTeams.length === teamsPerPlayer
-      ) {
-        // Copy locked player & their teams
-        const cloned = {
-          ...prevP,
-          id: i + 1,
-          label: `Player ${i + 1}`,
-          allTeams: [...prevP.allTeams],
-          team: prevP.allTeams[0],
-          isLocked: true
-        };
-        newPlayers[i] = cloned;
+      const customLabel = customPlayerLabels[i] || `Player ${i + 1}`;
+      if (prevP && prevP.isLocked && Array.isArray(prevP.allTeams) && prevP.allTeams.length === teamsPerPlayer) {
+        newPlayers[i] = { ...prevP, id: i + 1, label: customLabel };
         lockedTeamsFlat.push(...prevP.allTeams);
       }
     }
 
-    // Remove locked teams from pool so they can't be reused
+    // Remove locked from pool
     if (lockedTeamsFlat.length > 0) {
-      pool = pool.filter((t) =>
-        !lockedTeamsFlat.some(
-          (lt) =>
-            lt.name === t.name &&
-            lt.leagueId === t.leagueId &&
-            lt.stars === t.stars
-        )
-      );
+      pool = pool.filter(t => !lockedTeamsFlat.some(lt => lt.name === t.name && lt.leagueId === t.leagueId));
     }
 
-    const lockedTeamsCount = lockedTeamsFlat.length;
-
-    if (!onlyOnePerLeague && pool.length + lockedTeamsCount < totalTeamsNeeded) {
-      showMessage(
-        `Not enough teams (${pool.length + lockedTeamsCount}) for ${playerCount} players × ${teamsPerPlayer} teams each (with locks).`,
-        "error"
-      );
+    if (!onlyOnePerLeague && pool.length + lockedTeamsFlat.length < totalTeamsNeeded) {
+      showMessage(`Not enough teams (${pool.length + lockedTeamsFlat.length} available).`, "error");
+      generateBtn.disabled = false;
+      generateBtn.textContent = "Spin Squads";
       return;
     }
 
-    // ========== ASSIGN TEAMS ==========
-
+    // Assign
     if (onlyOnePerLeague) {
-      // ------------- One per league, single team per player (no multi teams allowed) -------------
       const leagueToTeams = new Map();
       for (const team of pool) {
-        if (!leagueToTeams.has(team.leagueId)) {
-          leagueToTeams.set(team.leagueId, []);
-        }
+        if (!leagueToTeams.has(team.leagueId)) leagueToTeams.set(team.leagueId, []);
         leagueToTeams.get(team.leagueId).push(team);
       }
-
-      const availableLeagueIds = Array.from(leagueToTeams.keys());
-
-      // Also include leagues already used by locked players
-      const lockedLeagueIds = new Set(
-        lockedTeamsFlat.map((t) => t.leagueId)
-      );
-
-      if (availableLeagueIds.length + lockedLeagueIds.size < playerCount) {
-        showMessage(
-          `You selected ${playerCount} players but there aren't enough distinct leagues with teams in this rating range (consider removing locks).`,
-          "error"
-        );
-        return;
-      }
-
-      shuffle(availableLeagueIds);
+      const availableLeagues = Array.from(leagueToTeams.keys());
+      shuffle(availableLeagues);
 
       for (let i = 0; i < playerCount; i++) {
-        if (newPlayers[i]) continue; // locked
-
-        // pick random league that still has teams
-        let pickLeague = null;
-        while (availableLeagueIds.length && !pickLeague) {
-          const lid = availableLeagueIds.pop();
-          const arr = leagueToTeams.get(lid);
-          if (arr && arr.length > 0) {
-            pickLeague = lid;
-          }
-        }
-
-        if (!pickLeague) {
-          showMessage(
-            "Ran out of leagues that match the constraints.",
-            "error"
-          );
+        if (newPlayers[i]) continue;
+        let lid = availableLeagues.pop();
+        if (!lid) {
+          showMessage("Ran out of distinct leagues.", "error");
+          generateBtn.disabled = false;
+          generateBtn.textContent = "Spin Squads";
           return;
         }
-
-        const teamsInLeague = leagueToTeams.get(pickLeague);
-        const randomTeam =
-          teamsInLeague[Math.floor(Math.random() * teamsInLeague.length)];
-
-        newPlayers[i] = {
-          id: i + 1,
-          label: `Player ${i + 1}`,
-          team: randomTeam,
-          allTeams: [randomTeam],
-          isLocked: false
-        };
+        const tList = leagueToTeams.get(lid);
+        const randTeam = tList[Math.floor(Math.random() * tList.length)];
+        const label = customPlayerLabels[i] || `Player ${i + 1}`;
+        newPlayers[i] = { id: i + 1, label: label, team: randTeam, allTeams: [randTeam], isLocked: false };
       }
     } else {
-      // ------------- Normal mode: multiple teams per player allowed -------------
       const remaining = [...pool];
       shuffle(remaining);
-
-      // Count already locked teams per player index
       for (let i = 0; i < playerCount; i++) {
-        if (newPlayers[i]) continue; // already filled from locked
-
+        if (newPlayers[i]) continue;
         const chunk = remaining.splice(0, teamsPerPlayer);
         if (chunk.length < teamsPerPlayer) {
-          showMessage(
-            "Not enough teams left after applying locks. Try removing some locks or changing settings.",
-            "error"
-          );
+          showMessage("Not enough teams left.", "error");
+          generateBtn.disabled = false;
+          generateBtn.textContent = "Spin Squads";
           return;
         }
-
-        newPlayers[i] = {
-          id: i + 1,
-          label: `Player ${i + 1}`,
-          team: chunk[0],
-          allTeams: chunk,
-          isLocked: false
-        };
+        const label = customPlayerLabels[i] || `Player ${i + 1}`;
+        newPlayers[i] = { id: i + 1, label: label, team: chunk[0], allTeams: chunk, isLocked: false };
       }
     }
 
-    // Sanity: ensure every slot filled
-    for (let i = 0; i < playerCount; i++) {
-      if (!newPlayers[i]) {
-        showMessage(
-          "Unexpected error while assigning teams. Please try spinning again.",
-          "error"
-        );
-        return;
-      }
-    }
-
-    // Save & render
     lastAssignments = newPlayers;
     renderResults(lastAssignments, resultsEl);
-    showMessage("Teams generated successfully!", "success");
+    showMessage("Squads Assigned!", "success");
+    generateBtn.disabled = false;
+    generateBtn.textContent = "Spin Squads";
     persistSettings();
   });
 }
+
 function renderResults(players, container) {
   container.innerHTML = "";
 
-  players.forEach((player) => {
+  players.forEach((player, index) => {
+    const firstTeam = player.allTeams[0];
     const card = document.createElement("div");
     card.className = "player-card";
     if (player.isLocked) card.classList.add("player-card--locked");
+    card.style.animationDelay = `${index * 0.1}s`;
 
-    // ==== LOGO WRAPPER ====
-    const logoWrapper = document.createElement("div");
-    logoWrapper.className = "player-logo-wrapper";
+    const logoUrl = firstTeam?.logo || "https://placehold.co/64x64/0f172a/ffffff?text=FC";
 
-    const logoImg = document.createElement("img");
-    logoImg.className = "player-logo";
-    logoImg.alt = "Team Logo";
+    card.innerHTML = `
+      <div class="card-top">
+        <div class="player-logo-wrapper">
+          <img src="${logoUrl}" class="player-logo" alt="logo">
+        </div>
+        <div class="player-rating">${firstTeam?.stars ? firstTeam.stars.toFixed(1) + "★" : ""}</div>
+      </div>
+      <div class="player-main">
+        <div class="player-label">${player.label}</div>
+        <div class="player-team">${player.allTeams.map(t => t.name).join(" / ")}</div>
+        <div class="player-meta">${firstTeam?.leagueName || ""}</div>
+      </div>
+      <button type="button" class="lock-btn ${player.isLocked ? 'lock-btn--active' : ''}">
+        ${player.isLocked ? "🔒 Locked" : "🔓 Lock Squad"}
+      </button>
+    `;
 
-    // Use first team logo if multi-team mode
-    const firstTeam = Array.isArray(player.allTeams)
-      ? player.allTeams[0]
-      : player.team;
-
-    logoImg.src =
-      firstTeam?.logo ||
-      "https://placehold.co/64x64/020617/ffffff?text=FC";
-
-    logoWrapper.appendChild(logoImg);
-
-    // ==== MAIN INFO ====
-    const main = document.createElement("div");
-    main.className = "player-main";
-
-    const label = document.createElement("div");
-    label.className = "player-label";
-    label.textContent = player.label;
-
-    const teamNameEl = document.createElement("div");
-    teamNameEl.className = "player-team";
-
-    if (Array.isArray(player.allTeams) && player.allTeams.length > 1) {
-      teamNameEl.textContent = player.allTeams.map((t) => t.name).join(" / ");
-    } else {
-      teamNameEl.textContent = firstTeam?.name ?? "Unknown";
-    }
-
-    const meta = document.createElement("div");
-    meta.className = "player-meta";
-    meta.textContent = firstTeam?.leagueName ?? "";
-
-    main.appendChild(label);
-    main.appendChild(teamNameEl);
-    main.appendChild(meta);
-
-    // ==== RIGHT SIDE: rating + lock ====
-    const side = document.createElement("div");
-    side.style.display = "flex";
-    side.style.flexDirection = "column";
-    side.style.alignItems = "flex-end";
-    side.style.gap = "4px";
-
-    const rating = document.createElement("div");
-    rating.className = "player-rating";
-    rating.textContent =
-      firstTeam?.stars != null ? `${firstTeam.stars.toFixed(1)}★` : "";
-
-    // Lock button
-    const lockBtn = document.createElement("button");
-    lockBtn.type = "button";
-    lockBtn.className = "lock-btn";
-
-    if (player.isLocked) {
-      lockBtn.classList.add("lock-btn--active");
-      lockBtn.textContent = "🔒 Locked";
-    } else {
-      lockBtn.textContent = "🔓 Lock";
-    }
-
-    lockBtn.addEventListener("click", () => {
+    card.querySelector(".lock-btn").addEventListener("click", () => {
       player.isLocked = !player.isLocked;
       renderResults(players, container);
     });
 
-    side.appendChild(rating);
-    side.appendChild(lockBtn);
-
-    // ==== ASSEMBLE CARD ====
-    card.appendChild(logoWrapper);
-    card.appendChild(main);
-    card.appendChild(side);
-
     container.appendChild(card);
   });
 }
-

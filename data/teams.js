@@ -339,13 +339,6 @@ const TEAMS = [
   {
     leagueId: "seriea",
     leagueName: "Serie A",
-    name: "Atalanta",
-    stars: 4.5,
-    logo: "https://placehold.co/64x64?text=ATA"
-  },
-  {
-    leagueId: "seriea",
-    leagueName: "Serie A",
     name: "Bergamo Calcio",
     stars: 4.5,
     logo: "https://placehold.co/64x64?text=BER"

@@ -1,230 +1,248 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>FC26 Team Picker & Tournament</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="stylesheet" href="style.css" />
-  </head>
-  <body>
-    <div class="app">
-      <!-- ========= HEADER ========= -->
-      <header class="app-header">
-        <div class="title-block">
-          <h1>FC26 Session Hub</h1>
-          <p class="subtitle">
-            Random teams · Custom tournaments · Score tracking
-          </p>
-        </div>
-        <div class="pill">Local FIFA Nights</div>
-      </header>
 
-      <!-- ========= MODE TABS ========= -->
-      <nav class="card">
+<head>
+  <meta charset="UTF-8" />
+  <title>FC26 Session Hub | Pro FIFA Tools</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <div class="app">
+    <!-- ========= HEADER ========= -->
+    <header class="app-header">
+      <div class="title-block">
+        <h1>FC26 Session Hub</h1>
+        <p class="subtitle">
+          Professional Team Picker · Tournament Master · Order Wheel
+        </p>
+      </div>
+      <div class="pill">Local Pro Sessions</div>
+    </header>
+
+    <!-- ========= MODE TABS ========= -->
+    <nav class="card">
+      <div class="card-body actions-row" id="mode-tabs" style="margin-top: 0">
+        <button type="button" class="active" data-tab="wheel" id="tab-btn-wheel">
+          Player Order
+        </button>
+        <button type="button" data-tab="picker" id="tab-btn-picker">
+          Team Picker
+        </button>
+        <button type="button" data-tab="tournament" id="tab-btn-tournament">
+          Tournament
+        </button>
+      </div>
+    </nav>
+
+    <!-- ========= TAB 0: PLAYER ORDER (WHEEL) ========= -->
+    <main id="tab-wheel">
+      <section class="card">
         <div class="card-header">
-          <div class="card-title">Mode</div>
+          <div class="card-title">Determine Player Order</div>
         </div>
-        <div class="card-body actions-row" id="mode-tabs">
-          <button
-            type="button"
-            class="btn-primary"
-            data-tab="picker"
-            id="tab-btn-picker"
-          >
-            Team Picker
-          </button>
-          <button
-            type="button"
-            class="btn-secondary"
-            data-tab="tournament"
-            id="tab-btn-tournament"
-          >
-            Tournament
-          </button>
-        </div>
-      </nav>
-
-      <!-- ========= TAB 1: TEAM PICKER ========= -->
-      <main id="tab-picker">
-        <section class="card">
-          <div class="card-header">
-            <div class="card-title">Team Picker</div>
-          </div>
-          <div class="card-body">
-            <div class="settings-grid">
-              <!-- Players -->
+        <div class="card-body">
+          <div class="wheel-ui">
+            <div class="players-column">
               <div class="field-group">
-                <label for="player-count" class="field-label">Players</label>
-                <input
-                  type="number"
-                  id="player-count"
-                  min="2"
-                  max="32"
-                  value="4"
-                />
-              </div>
-
-              <!-- Teams per player -->
-              <div class="field-group">
-                <label for="teams-per-player" class="field-label">
-                  Teams per player
-                </label>
-                <input
-                  type="number"
-                  id="teams-per-player"
-                  min="1"
-                  max="4"
-                  value="1"
-                />
-              </div>
-
-              <!-- Rating range -->
-              <div class="field-group">
-                <label class="field-label">Rating range</label>
-                <div style="display: flex; gap: 6px">
-                  <select id="rating-min"></select>
-                  <select id="rating-max"></select>
+                <label class="field-label">Current Players</label>
+                <div id="player-inputs" class="players-input-list">
+                  <!-- Inputs injected by main.js -->
                 </div>
-              </div>
-
-              <!-- Leagues -->
-              <div class="field-group field-row">
-                <label class="field-label">Leagues / Pools</label>
-                <div id="league-list" class="league-list"></div>
+                <button type="button" id="add-player-btn" class="btn-secondary" style="margin-top: 10px; width: 100%">
+                  + Add Player
+                </button>
               </div>
             </div>
 
-            <!-- One team per league -->
-            <div class="toggle-row">
-              <label class="toggle-label">
-                <input type="checkbox" id="one-per-league" />
-                One team per league
+            <div class="wheel-column">
+              <div class="wheel-container">
+                <div class="wheel-canvas-wrap">
+                  <div class="wheel-pointer"></div>
+                  <canvas id="wheel-canvas"></canvas>
+                </div>
+                <button type="button" id="spin-wheel-btn" class="btn-primary" style="width: 200px">
+                  Spin Order
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div id="winner-results" class="winner-display hidden">
+            <h3 style="font-size: 1rem; text-align: center; margin-bottom: 12px; color: var(--text-dim)">Spin Results
+            </h3>
+            <div id="winner-list" style="display: flex; flex-direction: column; gap: 8px"></div>
+            <button type="button" id="clear-wheel-btn" class="btn-secondary" style="margin-top: 20px; width: 100%">
+              Reset Order
+            </button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- ========= TAB 1: TEAM PICKER ========= -->
+    <main id="tab-picker" class="hidden">
+      <section class="card">
+        <div class="card-header">
+          <div class="card-title">Team Picker Settings</div>
+        </div>
+        <div class="card-body">
+          <div class="settings-grid">
+            <!-- Players -->
+            <div class="field-group">
+              <label for="player-count" class="field-label">Number of Players</label>
+              <input type="number" id="player-count" min="2" max="32" value="4" />
+            </div>
+
+            <!-- Teams per player -->
+            <div class="field-group">
+              <label for="teams-per-player" class="field-label">
+                Teams per player
               </label>
-              <p class="hint">
-                When enabled, each player’s first team will come from a
-                different league. Only works with 1 team per player.
-              </p>
+              <input type="number" id="teams-per-player" min="1" value="1" />
             </div>
 
-            <!-- Actions -->
-            <div class="actions-row">
-              <button type="button" id="generate-btn" class="btn-primary">
-                Spin teams
-              </button>
-              <button
-                type="button"
-                id="clear-settings-btn"
-                class="btn-secondary"
-              >
-                Reset settings
-              </button>
-            </div>
-
-            <p id="message" class="message"></p>
-          </div>
-        </section>
-
-        <!-- Assigned Teams -->
-        <section class="card">
-          <div class="card-header">
-            <div class="card-title">Assigned Teams</div>
-          </div>
-          <div class="card-body">
-            <div id="results" class="results-list">
-              <p class="placeholder">
-                Set your options and press <strong>Spin teams</strong>.
-              </p>
-            </div>
-          </div>
-        </section>
-      </main>
-
-      <!-- ========= TAB 2: TOURNAMENT ========= -->
-      <main id="tab-tournament" class="hidden">
-        <!-- Tournament setup -->
-        <section class="card">
-          <div class="card-header">
-            <div class="card-title">Tournament Setup</div>
-          </div>
-          <div class="card-body">
-            <div class="settings-grid">
-              <!-- Type -->
-              <div class="field-group">
-                <label class="field-label">Tournament type</label>
-                <select id="tournament-type">
-                  <option value="knockout">Knockout</option>
-                  <option value="groups">Group Stage</option>
-                  <option value="groups-knockout">Group + Knockout</option>
-                </select>
-              </div>
-
-              <!-- Teams source / clear -->
-              <div class="field-group field-row">
-                <label class="field-label">Teams source</label>
-                <div class="actions-row">
-                  <button
-                    type="button"
-                    id="tournament-use-last"
-                    class="btn-primary"
-                  >
-                    Generate Tournament
-                  </button>
-                  <button
-                    type="button"
-                    id="tournament-clear"
-                    class="btn-secondary"
-                  >
-                    Clear tournament
-                  </button>
-                </div>
-                <p id="tournament-setup-message" class="message"></p>
+            <!-- Rating range -->
+            <div class="field-group">
+              <label class="field-label">Star Rating range</label>
+              <div style="display: flex; gap: 6px">
+                <select id="rating-min"></select>
+                <select id="rating-max"></select>
               </div>
             </div>
 
-            <!-- 🔹 NEW: Home & away toggles -->
-            <div class="toggle-row">
+            <!-- Leagues -->
+            <div class="field-group field-row field-full">
+              <label class="field-label">Available Leagues / Pools</label>
+              <div id="league-list" class="league-list"></div>
+            </div>
+          </div>
+
+          <!-- One team per league -->
+          <div class="toggle-row">
+            <label class="toggle-label">
+              <input type="checkbox" id="one-per-league" />
+              One team per league
+            </label>
+            <p class="hint">
+              Each player gets a team from a different league. (Works with 1 team per player).
+            </p>
+          </div>
+
+          <!-- Actions -->
+          <div class="actions-row">
+            <button type="button" id="generate-btn" class="btn-primary">
+              Spin Squads
+            </button>
+            <button type="button" id="clear-settings-btn" class="btn-secondary">
+              Reset All
+            </button>
+          </div>
+
+          <p id="message" class="message"></p>
+        </div>
+      </section>
+
+      <!-- Assigned Teams -->
+      <section class="card">
+        <div class="card-header">
+          <div class="card-title">Assigned Teams</div>
+        </div>
+        <div class="card-body">
+          <div id="results" class="results-list">
+            <p class="placeholder" style="text-align: center; width: 100%; padding: 40px; color: var(--text-dim)">
+              Configure your session and press <strong>Spin Squads</strong>.
+            </p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- ========= TAB 2: TOURNAMENT ========= -->
+    <main id="tab-tournament" class="hidden">
+      <!-- Tournament setup -->
+      <section class="card">
+        <div class="card-header">
+          <div class="card-title">Tournament Management</div>
+        </div>
+        <div class="card-body">
+          <div class="settings-grid">
+            <!-- Type -->
+            <div class="field-group">
+              <label class="field-label">Competition Format</label>
+              <select id="tournament-type">
+                <option value="knockout">Knockout Bracket</option>
+                <option value="groups">Group Stage League</option>
+                <option value="groups-knockout">Champions Format (Groups + K.O.)</option>
+              </select>
+            </div>
+
+            <!-- Teams source / clear -->
+            <div class="field-group field-row">
+              <label class="field-label">Actions</label>
+              <div class="actions-row">
+                <button type="button" id="tournament-use-last" class="btn-primary">
+                  Generate Tournament
+                </button>
+                <button type="button" id="tournament-clear" class="btn-secondary">
+                  Clear
+                </button>
+              </div>
+              <p id="tournament-setup-message" class="message"></p>
+            </div>
+          </div>
+
+          <!-- Toggles -->
+          <div class="toggle-row">
+            <div class="toggle-item">
               <label class="toggle-label">
                 <input type="checkbox" id="groups-home-away" />
-                Home & away in group stage
+                Double Leg Group Stage
               </label>
-              <p class="hint">
-                Each pair in the group plays 2 legs if this is enabled.
-              </p>
             </div>
-
-            <div class="toggle-row">
+            <div class="toggle-item" style="margin-top: 10px">
               <label class="toggle-label">
                 <input type="checkbox" id="knockout-home-away" />
-                Home & away in knockouts (except Final)
+                Two-Legged Knockouts
               </label>
-              <p class="hint">
-                All knockout ties use 2 legs, but the Final is always one match.
-              </p>
             </div>
           </div>
-        </section>
+        </div>
+      </section>
 
-        <!-- Groups view -->
-        <section class="card" id="groups-card" style="display: none">
-          <div class="card-header">
-            <div class="card-title">Groups</div>
-          </div>
-          <div class="card-body" id="groups-container"></div>
-        </section>
+      <!-- Groups view -->
+      <section class="card" id="groups-card" style="display: none">
+        <div class="card-header">
+          <div class="card-title">Group Stage Standings</div>
+        </div>
+        <div class="card-body" id="groups-container"></div>
+      </section>
 
-        <!-- Knockout view -->
-        <section class="card" id="knockout-card" style="display: none">
-          <div class="card-header">
-            <div class="card-title">Knockout Bracket</div>
-          </div>
-          <div class="card-body" id="knockout-container"></div>
-        </section>
-      </main>
+      <!-- Knockout view -->
+      <section class="card" id="knockout-card" style="display: none">
+        <div class="card-header">
+          <div class="card-title">Final Bracket</div>
+        </div>
+        <div class="card-body" id="knockout-container"></div>
+      </section>
+    </main>
 
-      <!-- ========= FOOTER ========= -->
-      <footer class="app-footer">Built for late-night FC sessions ⚽</footer>
+    <!-- ========= FOOTER ========= -->
+    <footer class="app-footer">Professional FC Session Hub</footer>
+  </div>
+
+  <!-- ========= CUSTOM WINNER MODAL ========= -->
+  <div id="winner-modal" class="modal-overlay hidden">
+    <div class="modal-content">
+      <div class="modal-badge">New Assignment</div>
+      <h2 id="modal-winner-name">Player Name</h2>
+      <p id="modal-winner-rank">Rank #1</p>
+      <button type="button" id="close-modal-btn" class="btn-primary">Continue</button>
     </div>
+  </div>
 
-    <script type="module" src="main.js"></script>
-  </body>
+  <script type="module" src="main.js"></script>
+</body>
+
 </html>
